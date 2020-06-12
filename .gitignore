@@ -23,6 +23,7 @@ forge/generated/*
 !projects/**/Makefile
 compile_commands.json
 **/Exports.h
+vsbuild
 
 # User-specific files
 *.suo
