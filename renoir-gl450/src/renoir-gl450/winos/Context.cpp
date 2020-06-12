@@ -1,5 +1,6 @@
 #include "renoir-gl450/Context.h"
 #include "renoir-gl450/Handle.h"
+#include "renoir/Renoir.h"
 
 #include <mn/Memory.h>
 
@@ -38,9 +39,34 @@ struct Renoir_GL450_Context
 	HDC dummy_dc;
 };
 
+inline static int
+_renoir_gl450_msaa_to_int(RENOIR_MSAA_MODE mode)
+{
+	int res = 0;
+	switch(mode)
+	{
+	case RENOIR_MSAA_MODE_NONE:
+		res = 0;
+		break;
+	case RENOIR_MSAA_MODE_2:
+		res = 2;
+		break;
+	case RENOIR_MSAA_MODE_4:
+		res = 4;
+		break;
+	case RENOIR_MSAA_MODE_8:
+		res = 8;
+		break;
+	default:
+		assert(false && "unreachable");
+		break;
+	}
+	return res;
+}
+
 // API
 Renoir_GL450_Context*
-renoir_gl450_context_new()
+renoir_gl450_context_new(Renoir_Settings* settings)
 {
 	HGLRC fake_ctx = NULL;
 	HDC fake_dc = NULL;
@@ -152,8 +178,8 @@ renoir_gl450_context_new()
 		WGL_ALPHA_BITS_ARB, 8,
 		WGL_DEPTH_BITS_ARB, 24,
 		WGL_STENCIL_BITS_ARB, 8,
-		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-		WGL_SAMPLES_ARB, 2,
+		WGL_SAMPLE_BUFFERS_ARB, (settings->msaa != RENOIR_MSAA_MODE_NONE) ? GL_TRUE : GL_FALSE,
+		WGL_SAMPLES_ARB, _renoir_gl450_msaa_to_int(settings->msaa),
 		0, 0
 	};
 
@@ -231,7 +257,7 @@ renoir_gl450_context_free(Renoir_GL450_Context* self)
 }
 
 void
-renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h)
+renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, Renoir_Settings* settings)
 {
 	auto hdc = GetDC((HWND)h->view_window.handle);
 	h->view_window.hdc = hdc;
@@ -247,8 +273,8 @@ renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h)
 		WGL_ALPHA_BITS_ARB, 8,
 		WGL_DEPTH_BITS_ARB, 24,
 		WGL_STENCIL_BITS_ARB, 8,
-		WGL_SAMPLE_BUFFERS_ARB, GL_TRUE,
-		WGL_SAMPLES_ARB, 2,
+		WGL_SAMPLE_BUFFERS_ARB, (settings->msaa != RENOIR_MSAA_MODE_NONE) ? GL_TRUE : GL_FALSE,
+		WGL_SAMPLES_ARB, _renoir_gl450_msaa_to_int(settings->msaa),
 		0, 0
 	};
 

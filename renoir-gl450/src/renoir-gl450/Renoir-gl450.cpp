@@ -813,7 +813,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 	case RENOIR_COMMAND_KIND_VIEW_WINDOW_INIT:
 	{
-		renoir_gl450_context_window_init(self->ctx, command->view_window_init.handle);
+		renoir_gl450_context_window_init(self->ctx, command->view_window_init.handle, &self->settings);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -1530,7 +1530,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 static bool
 _renoir_gl450_init(Renoir* api, Renoir_Settings settings)
 {
-	auto ctx = renoir_gl450_context_new();
+	auto ctx = renoir_gl450_context_new(&settings);
 	if (ctx == NULL)
 		return false;
 
