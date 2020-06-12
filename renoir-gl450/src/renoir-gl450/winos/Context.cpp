@@ -292,8 +292,18 @@ renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, R
 	result = wglMakeCurrent(hdc, self->context);
 	assert(result && "wglMakeCurrent failed");
 
-	/*result = wglSwapIntervalEXT(0);
-	assert(result && "disabling vsync failed");*/
+	switch (settings->vsync)
+	{
+	case RENOIR_VSYNC_MODE_ON:
+		wglSwapIntervalEXT(1);
+		break;
+	case RENOIR_VSYNC_MODE_OFF:
+		wglSwapIntervalEXT(0);
+		break;
+	default:
+		assert(false && "unreachable");
+		break;
+	}
 }
 
 void

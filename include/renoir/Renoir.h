@@ -154,11 +154,16 @@ typedef enum RENOIR_PIPELINE_MODE {
 } RENOIR_PIPELINE;
 
 typedef enum RENOIR_MSAA_MODE {
-	RENOIR_MSAA_MODE_NONE,
-	RENOIR_MSAA_MODE_2,
-	RENOIR_MSAA_MODE_4,
-	RENOIR_MSAA_MODE_8,
+	RENOIR_MSAA_MODE_NONE = 0,
+	RENOIR_MSAA_MODE_2 = 2,
+	RENOIR_MSAA_MODE_4 = 4,
+	RENOIR_MSAA_MODE_8 = 8
 } RENOIR_MSAA_MODE;
+
+typedef enum RENOIR_VSYNC_MODE {
+	RENOIR_VSYNC_MODE_ON,
+	RENOIR_VSYNC_MODE_OFF
+} RENOIR_VSYNC_MODE;
 
 // Handles
 typedef struct Renoir_Buffer { void* handle; } Renoir_Buffer;
@@ -184,6 +189,7 @@ typedef struct Renoir_Color {
 typedef struct Renoir_Settings {
 	bool defer_api_calls;
 	RENOIR_MSAA_MODE msaa;
+	RENOIR_VSYNC_MODE vsync;
 } Renoir_Settings;
 
 typedef struct Renoir_Pipeline_Desc {
