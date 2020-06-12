@@ -354,6 +354,8 @@ _renoir_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			self->event.kind = RENOIR_EVENT_KIND_WINDOW_RESIZE;
 			self->event.resize.width = LOWORD(lparam);
 			self->event.resize.height = HIWORD(lparam);
+			self->window.width = LOWORD(lparam);
+			self->window.height = HIWORD(lparam);
 		}
 		break;
 	default:

@@ -10,11 +10,17 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(RENOIR_BUILD_EXAMPLES "Build example applications that showcase the renoir libraries." ON)
 option(RENOIR_UNITY_BUILD "Combine all renoir source files into one jumbo build." ON)
+option(RENOIR_USE_LOCAL_MN "Uses the local mn submodule in renoir" ON)
 
-add_subdirectory(external/mn EXCLUDE_FROM_ALL)
+if (RENOIR_USE_LOCAL_MN)
+	add_subdirectory(external/mn EXCLUDE_FROM_ALL)
+endif()
 add_subdirectory(external/glew EXCLUDE_FROM_ALL)
 add_subdirectory(renoir-window)
 add_subdirectory(renoir-gl450)
+
+add_library(renoir INTERFACE)
+target_include_directories(renoir INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 
 if (RENOIR_BUILD_EXAMPLES)
 	add_subdirectory(examples)
