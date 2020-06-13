@@ -148,11 +148,6 @@ typedef enum RENOIR_SWITCH {
 	RENOIR_SWITCH_DISABLE
 } RENOIR_ACTIVE;
 
-typedef enum RENOIR_PIPELINE_MODE {
-	RENOIR_PIPELINE_MODE_RASTER,
-	RENOIR_PIPELINE_MODE_COMPUTE
-} RENOIR_PIPELINE;
-
 typedef enum RENOIR_MSAA_MODE {
 	RENOIR_MSAA_MODE_NONE = 0,
 	RENOIR_MSAA_MODE_2 = 2,
@@ -193,29 +188,15 @@ typedef struct Renoir_Settings {
 } Renoir_Settings;
 
 typedef struct Renoir_Pipeline_Desc {
-	RENOIR_PIPELINE_MODE mode;
-	union
-	{
-		struct
-		{
-			RENOIR_SWITCH cull;
-			RENOIR_FACE cull_face;
-			RENOIR_ORIENTATION cull_front;
+	RENOIR_SWITCH cull;
+	RENOIR_FACE cull_face;
+	RENOIR_ORIENTATION cull_front;
 
-			RENOIR_SWITCH depth;
+	RENOIR_SWITCH depth;
 
-			RENOIR_SWITCH blend;
-			RENOIR_BLEND src_rgb, dst_rgb, src_alpha, dst_alpha;
-			RENOIR_BLEND_EQ eq_rgb, eq_alpha;
-
-			Renoir_Program shader;
-		} raster;
-
-		struct
-		{
-			Renoir_Compute shader;
-		} compute;
-	};
+	RENOIR_SWITCH blend;
+	RENOIR_BLEND src_rgb, dst_rgb, src_alpha, dst_alpha;
+	RENOIR_BLEND_EQ eq_rgb, eq_alpha;
 } Pipeline_Desc;
 
 typedef struct Renoir_Buffer_Desc {
@@ -300,6 +281,8 @@ typedef struct Renoir
 	bool (*init)(struct Renoir* self, Renoir_Settings settings);
 	void (*dispose)(struct Renoir* self);
 
+	void (*handle_ref)(struct Renoir* self, void* handle);
+
 	Renoir_View (*view_window_new)(struct Renoir* api, int width, int height, void* window, void* display);
 	void (*view_free)(struct Renoir* api, Renoir_View view);
 	void (*view_resize)(struct Renoir* api, Renoir_View view, int width, int height);
@@ -331,6 +314,7 @@ typedef struct Renoir
 	void (*pass_end)(struct Renoir* api, Renoir_Pass pass);
 	void (*clear)(struct Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc);
 	void (*use_pipeline)(struct Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeline);
+	void (*use_program)(struct Renoir* api, Renoir_Pass pass, Renoir_Program program);
 	// Write Functions
 	void (*buffer_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size);
 	void (*texture_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc);

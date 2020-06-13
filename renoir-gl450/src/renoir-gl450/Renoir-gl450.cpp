@@ -8,6 +8,7 @@
 #include <mn/Defer.h>
 #include <mn/IO.h>
 #include <mn/OS.h>
+#include <mn/Log.h>
 
 #include <GL/glew.h>
 
@@ -467,6 +468,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_PASS_BEGIN,
 	RENOIR_COMMAND_KIND_PASS_CLEAR,
 	RENOIR_COMMAND_KIND_USE_PIPELINE,
+	RENOIR_COMMAND_KIND_USE_PROGRAM,
 	RENOIR_COMMAND_KIND_BUFFER_WRITE,
 	RENOIR_COMMAND_KIND_TEXTURE_WRITE,
 	RENOIR_COMMAND_KIND_BUFFER_READ,
@@ -590,6 +592,11 @@ struct Renoir_Command
 
 		struct
 		{
+			Renoir_Handle* program;
+		} use_program;
+
+		struct
+		{
 			Renoir_Handle* handle;
 			size_t offset;
 			void* bytes;
@@ -655,6 +662,7 @@ struct IRenoir
 	Renoir_Command *command_list_tail;
 
 	Renoir_Handle* current_pipeline;
+	Renoir_Handle* current_program;
 	GLuint vao;
 };
 
@@ -763,6 +771,7 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
 	case RENOIR_COMMAND_KIND_USE_PIPELINE:
+	case RENOIR_COMMAND_KIND_USE_PROGRAM:
 	case RENOIR_COMMAND_KIND_BUFFER_READ:
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
@@ -1017,7 +1026,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &size);
 			size = size > error_length ? error_length : size;
 			glGetShaderInfoLog(vertex_shader, size, &size, error);
-			mn::panic("vertex shader compile error\n{}", error);
+			mn::log_error("vertex shader compile error\n{}", error);
+			break;
 		}
 
 		auto pixel_shader = glCreateShader(GL_FRAGMENT_SHADER);
@@ -1030,7 +1040,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glGetShaderiv(pixel_shader, GL_INFO_LOG_LENGTH, &size);
 			size = size > error_length ? error_length : size;
 			glGetShaderInfoLog(pixel_shader, size, &size, error);
-			mn::panic("pixel shader compile error\n{}", error);
+			mn::log_error("pixel shader compile error\n{}", error);
+			break;
 		}
 
 		GLuint geometry_shader = 0;
@@ -1046,7 +1057,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				glGetShaderiv(geometry_shader, GL_INFO_LOG_LENGTH, &size);
 				size = size > error_length ? error_length : size;
 				glGetShaderInfoLog(geometry_shader, size, &size, error);
-				mn::panic("pixel shader compile error\n{}", error);
+				mn::log_error("pixel shader compile error\n{}", error);
+				break;
 			}
 		}
 
@@ -1150,25 +1162,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto& h = command->pipeline_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
-
-		// free the shader
-		Renoir_Command extra_shader_free_command{};
-		if (h->pipeline.desc.mode == RENOIR_PIPELINE_MODE_RASTER)
-		{
-			extra_shader_free_command.kind = RENOIR_COMMAND_KIND_PROGRAM_FREE;
-			extra_shader_free_command.program_free.handle = (Renoir_Handle*)h->pipeline.desc.raster.shader.handle;
-		}
-		else if (h->pipeline.desc.mode == RENOIR_PIPELINE_MODE_COMPUTE)
-		{
-			extra_shader_free_command.kind = RENOIR_COMMAND_KIND_COMPUTE_FREE;
-			extra_shader_free_command.compute_free.handle = (Renoir_Handle*)h->pipeline.desc.compute.shader.handle;
-		}
-		else
-		{
-			assert(false && "unreachable");
-		}
-		_renoir_gl450_command_execute(self, &extra_shader_free_command);
-
 		_renoir_gl450_handle_free(self, h);
 		assert(_renoir_gl450_check());
 		break;
@@ -1220,61 +1213,54 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		self->current_pipeline = command->use_pipeline.pipeline;
 
 		auto h = self->current_pipeline;
-		if (h->pipeline.desc.mode == RENOIR_PIPELINE_MODE_RASTER)
+		if (h->pipeline.desc.cull == RENOIR_SWITCH_ENABLE)
 		{
-			if (h->pipeline.desc.raster.cull == RENOIR_SWITCH_ENABLE)
-			{
-				auto gl_face = _renoir_face_to_gl(h->pipeline.desc.raster.cull_face);
-				auto gl_orientation = _renoir_orientation_to_gl(h->pipeline.desc.raster.cull_front);
-				glEnable(GL_CULL_FACE);
-				glCullFace(gl_face);
-				glFrontFace(gl_orientation);
-			}
-			else
-			{
-				glDisable(GL_CULL_FACE);
-			}
-
-			if (h->pipeline.desc.raster.blend == RENOIR_SWITCH_ENABLE)
-			{
-				auto gl_src_rgb = _renoir_blend_to_gl(h->pipeline.desc.raster.src_rgb);
-				auto gl_dst_rgb = _renoir_blend_to_gl(h->pipeline.desc.raster.dst_rgb);
-				auto gl_src_alpha = _renoir_blend_to_gl(h->pipeline.desc.raster.src_alpha);
-				auto gl_dst_alpha = _renoir_blend_to_gl(h->pipeline.desc.raster.dst_alpha);
-				auto gl_blend_eq_rgb = _renoir_blend_eq_to_gl(h->pipeline.desc.raster.eq_rgb);
-				auto gl_blend_eq_alpha = _renoir_blend_eq_to_gl(h->pipeline.desc.raster.eq_alpha);
-				glEnable(GL_BLEND);
-				glBlendFuncSeparate(gl_src_rgb, gl_dst_rgb, gl_src_alpha, gl_dst_alpha);
-				glBlendEquationSeparate(gl_blend_eq_rgb, gl_blend_eq_alpha);
-			}
-			else
-			{
-				glDisable(GL_BLEND);
-			}
-
-			if (h->pipeline.desc.raster.depth == RENOIR_SWITCH_ENABLE)
-			{
-				glEnable(GL_DEPTH_TEST);
-				glDepthRange(0.0, 1.0);
-			}
-			else
-			{
-				glDisable(GL_DEPTH_TEST);
-			}
-
-			auto program = (Renoir_Handle*)h->pipeline.desc.raster.shader.handle;
-			glUseProgram(program->program.id);
-		}
-		else if (h->pipeline.desc.mode == RENOIR_PIPELINE_MODE_COMPUTE)
-		{
-			auto program = (Renoir_Handle*)h->pipeline.desc.compute.shader.handle;
-			glUseProgram(program->program.id);
+			auto gl_face = _renoir_face_to_gl(h->pipeline.desc.cull_face);
+			auto gl_orientation = _renoir_orientation_to_gl(h->pipeline.desc.cull_front);
+			glEnable(GL_CULL_FACE);
+			glCullFace(gl_face);
+			glFrontFace(gl_orientation);
 		}
 		else
 		{
-			assert(false && "unreachable");
+			glDisable(GL_CULL_FACE);
 		}
+
+		if (h->pipeline.desc.blend == RENOIR_SWITCH_ENABLE)
+		{
+			auto gl_src_rgb = _renoir_blend_to_gl(h->pipeline.desc.src_rgb);
+			auto gl_dst_rgb = _renoir_blend_to_gl(h->pipeline.desc.dst_rgb);
+			auto gl_src_alpha = _renoir_blend_to_gl(h->pipeline.desc.src_alpha);
+			auto gl_dst_alpha = _renoir_blend_to_gl(h->pipeline.desc.dst_alpha);
+			auto gl_blend_eq_rgb = _renoir_blend_eq_to_gl(h->pipeline.desc.eq_rgb);
+			auto gl_blend_eq_alpha = _renoir_blend_eq_to_gl(h->pipeline.desc.eq_alpha);
+			glEnable(GL_BLEND);
+			glBlendFuncSeparate(gl_src_rgb, gl_dst_rgb, gl_src_alpha, gl_dst_alpha);
+			glBlendEquationSeparate(gl_blend_eq_rgb, gl_blend_eq_alpha);
+		}
+		else
+		{
+			glDisable(GL_BLEND);
+		}
+
+		if (h->pipeline.desc.depth == RENOIR_SWITCH_ENABLE)
+		{
+			glEnable(GL_DEPTH_TEST);
+			glDepthRange(0.0, 1.0);
+		}
+		else
+		{
+			glDisable(GL_DEPTH_TEST);
+		}
+
 		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_USE_PROGRAM:
+	{
+		auto& h = command->use_program.program;
+		self->current_program = h;
+		glUseProgram(self->current_program->program.id);
 		break;
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_WRITE:
@@ -1559,6 +1545,13 @@ _renoir_gl450_dispose(Renoir* api)
 	mn::pool_free(self->handle_pool);
 	mn::pool_free(self->command_pool);
 	mn::free(self);
+}
+
+static void
+_renoir_gl450_handle_ref(Renoir* api, void* handle)
+{
+	auto h = (Renoir_Handle*)handle;
+	h->rc.fetch_add(1);
 }
 
 static Renoir_View
@@ -1847,49 +1840,33 @@ _renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 {
 	auto self = api->ctx;
 
-	if (desc.mode == RENOIR_PIPELINE_MODE_RASTER)
-	{
-		if (desc.raster.cull == RENOIR_SWITCH_DEFAULT)
-			desc.raster.cull = RENOIR_SWITCH_ENABLE;
-		if (desc.raster.cull_face == RENOIR_FACE_NONE)
-			desc.raster.cull_face = RENOIR_FACE_BACK;
-		if (desc.raster.cull_front == RENOIR_ORIENTATION_NONE)
-			desc.raster.cull_front = RENOIR_ORIENTATION_CCW;
+	if (desc.cull == RENOIR_SWITCH_DEFAULT)
+		desc.cull = RENOIR_SWITCH_ENABLE;
+	if (desc.cull_face == RENOIR_FACE_NONE)
+		desc.cull_face = RENOIR_FACE_BACK;
+	if (desc.cull_front == RENOIR_ORIENTATION_NONE)
+		desc.cull_front = RENOIR_ORIENTATION_CCW;
 
-		if (desc.raster.depth == RENOIR_SWITCH_DEFAULT)
-			desc.raster.depth = RENOIR_SWITCH_ENABLE;
+	if (desc.depth == RENOIR_SWITCH_DEFAULT)
+		desc.depth = RENOIR_SWITCH_ENABLE;
 
-		if (desc.raster.blend == RENOIR_SWITCH_DEFAULT)
-			desc.raster.blend = RENOIR_SWITCH_ENABLE;
-		if (desc.raster.src_rgb == RENOIR_BLEND_NONE)
-			desc.raster.src_rgb = RENOIR_BLEND_SRC_ALPHA;
-		if (desc.raster.dst_rgb == RENOIR_BLEND_NONE)
-			desc.raster.dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-		if (desc.raster.src_alpha == RENOIR_BLEND_NONE)
-			desc.raster.src_alpha = RENOIR_BLEND_ZERO;
-		if (desc.raster.dst_alpha == RENOIR_BLEND_NONE)
-			desc.raster.dst_alpha = RENOIR_BLEND_ONE;
-		if (desc.raster.eq_rgb == RENOIR_BLEND_EQ_NONE)
-			desc.raster.eq_rgb = RENOIR_BLEND_EQ_ADD;
-		if (desc.raster.eq_alpha == RENOIR_BLEND_EQ_NONE)
-			desc.raster.eq_alpha = RENOIR_BLEND_EQ_ADD;
-	}
+	if (desc.blend == RENOIR_SWITCH_DEFAULT)
+		desc.blend = RENOIR_SWITCH_ENABLE;
+	if (desc.src_rgb == RENOIR_BLEND_NONE)
+		desc.src_rgb = RENOIR_BLEND_SRC_ALPHA;
+	if (desc.dst_rgb == RENOIR_BLEND_NONE)
+		desc.dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+	if (desc.src_alpha == RENOIR_BLEND_NONE)
+		desc.src_alpha = RENOIR_BLEND_ZERO;
+	if (desc.dst_alpha == RENOIR_BLEND_NONE)
+		desc.dst_alpha = RENOIR_BLEND_ONE;
+	if (desc.eq_rgb == RENOIR_BLEND_EQ_NONE)
+		desc.eq_rgb = RENOIR_BLEND_EQ_ADD;
+	if (desc.eq_alpha == RENOIR_BLEND_EQ_NONE)
+		desc.eq_alpha = RENOIR_BLEND_EQ_ADD;
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
-
-	if (desc.mode == RENOIR_PIPELINE_MODE_RASTER)
-	{
-		_renoir_gl450_handle_ref((Renoir_Handle*)desc.raster.shader.handle);
-	}
-	else if (desc.mode == RENOIR_PIPELINE_MODE_COMPUTE)
-	{
-		_renoir_gl450_handle_ref((Renoir_Handle*)desc.compute.shader.handle);
-	}
-	else
-	{
-		assert(false && "unreachble");
-	}
 
 	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PIPELINE);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PIPELINE_NEW);
@@ -2020,6 +1997,20 @@ _renoir_gl450_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeli
 	mn::mutex_unlock(self->mtx);
 
 	command->use_pipeline.pipeline = (Renoir_Handle*)pipeline.handle;
+	_renoir_gl450_command_push(&h->pass, command);
+}
+
+static void
+_renoir_gl450_use_program(Renoir* api, Renoir_Pass pass, Renoir_Program program)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_USE_PROGRAM);
+	mn::mutex_unlock(self->mtx);
+
+	command->use_program.program = (Renoir_Handle*)program.handle;
 	_renoir_gl450_command_push(&h->pass, command);
 }
 
@@ -2166,6 +2157,8 @@ renoir_api()
 	_api.init = _renoir_gl450_init;
 	_api.dispose = _renoir_gl450_dispose;
 
+	_api.handle_ref = _renoir_gl450_handle_ref;
+
 	_api.view_window_new = _renoir_gl450_view_window_new;
 	_api.view_free = _renoir_gl450_view_free;
 	_api.view_resize = _renoir_gl450_view_resize;
@@ -2196,6 +2189,7 @@ renoir_api()
 	_api.pass_end = _renoir_gl450_pass_end;
 	_api.clear = _renoir_gl450_clear;
 	_api.use_pipeline = _renoir_gl450_use_pipeline;
+	_api.use_program = _renoir_gl450_use_program;
 	_api.buffer_write = _renoir_gl450_buffer_write;
 	_api.texture_write = _renoir_gl450_texture_write;
 	_api.buffer_read = _renoir_gl450_buffer_read;
