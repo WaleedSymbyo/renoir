@@ -297,6 +297,7 @@ typedef struct Renoir
 	Renoir_Sampler (*sampler_new)(struct Renoir* api, Renoir_Sampler_Desc desc);
 	void (*sampler_free)(struct Renoir* api, Renoir_Sampler sampler);
 
+	bool (*program_check)(struct Renoir* api, RENOIR_SHADER stage, const char* bytes, size_t bytes_size, char* error, size_t error_size);
 	Renoir_Program (*program_new)(struct Renoir* api, Renoir_Program_Desc desc);
 	void (*program_free)(struct Renoir* api, Renoir_Program program);
 

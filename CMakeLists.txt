@@ -16,6 +16,7 @@ if (RENOIR_USE_LOCAL_MN)
 	add_subdirectory(external/mn EXCLUDE_FROM_ALL)
 endif()
 add_subdirectory(external/glew EXCLUDE_FROM_ALL)
+add_subdirectory(external/glslang-8.13.3743 EXCLUDE_FROM_ALL)
 add_subdirectory(renoir-window)
 add_subdirectory(renoir-gl450)
 

@@ -45,6 +45,8 @@ add_library(Renoir::renoir-gl450 ALIAS renoir-gl450)
 target_link_libraries(renoir-gl450
 	PRIVATE
 		glew
+		SPIRV
+		glslang
 		mn
 		"$<$<PLATFORM_ID:Windows>:opengl32>"
 )

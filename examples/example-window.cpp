@@ -47,14 +47,15 @@ int main()
 	renoir_window_native_handles(window, &handle, &display);
 	Renoir_View view = gfx->view_window_new(gfx, 800, 600, handle, display);
 
+	bool dbg = gfx->program_check(gfx, RENOIR_SHADER_VERTEX, vertex_shader, 0, nullptr, 0);
+	dbg = gfx->program_check(gfx, RENOIR_SHADER_PIXEL, pixel_shader, 0, nullptr, 0);
+	
 	Renoir_Program_Desc program_desc{};
 	program_desc.vertex.bytes = vertex_shader;
 	program_desc.pixel.bytes = pixel_shader;
 	Renoir_Program program = gfx->program_new(gfx, program_desc);
 
 	Renoir_Pipeline_Desc pipeline_desc{};
-	pipeline_desc.mode = RENOIR_PIPELINE_MODE_RASTER;
-	pipeline_desc.raster.shader = program;
 	Renoir_Pipeline pipeline = gfx->pipeline_new(gfx, pipeline_desc);
 
 	float triangle_data[] = {
@@ -114,6 +115,7 @@ int main()
 		gfx->clear(gfx, pass, clear);
 
 		gfx->use_pipeline(gfx, pass, pipeline);
+		gfx->use_program(gfx, pass, program);
 
 		Renoir_Draw_Desc draw{};
 		draw.primitive = RENOIR_PRIMITIVE_TRIANGLES;
