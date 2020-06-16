@@ -336,8 +336,8 @@ _renoir_pixelformat_to_internal_gl(RENOIR_PIXELFORMAT format)
 	GLenum res = 0;
 	switch (format)
 	{
-	case RENOIR_PIXELFORMAT_RGBA:
-		res = GL_RGBA32F;
+	case RENOIR_PIXELFORMAT_RGBA8:
+		res = GL_RGBA8;
 		break;
 	case RENOIR_PIXELFORMAT_R16I:
 		res = GL_R16I;
@@ -373,7 +373,7 @@ _renoir_pixelformat_to_gl(RENOIR_PIXELFORMAT format)
 	GLint res = 0;
 	switch (format)
 	{
-	case RENOIR_PIXELFORMAT_RGBA:
+	case RENOIR_PIXELFORMAT_RGBA8:
 		res = GL_RGBA;
 		break;
 	case RENOIR_PIXELFORMAT_R16I:
@@ -401,27 +401,62 @@ _renoir_pixelformat_to_gl(RENOIR_PIXELFORMAT format)
 }
 
 inline static GLenum
+_renoir_pixelformat_to_type_gl(RENOIR_PIXELFORMAT format)
+{
+	GLenum res = 0;
+	switch (format)
+	{
+	case RENOIR_PIXELFORMAT_R8:
+	case RENOIR_PIXELFORMAT_RGBA8:
+		res = GL_UNSIGNED_BYTE;
+		break;
+	case RENOIR_PIXELFORMAT_R16I:
+		res = GL_SHORT;
+		break;
+	case RENOIR_PIXELFORMAT_R16F:
+		res = GL_HALF_FLOAT;
+		break;
+	case RENOIR_PIXELFORMAT_R32F:
+	case RENOIR_PIXELFORMAT_R32G32F:
+		res = GL_FLOAT;
+		break;
+	case RENOIR_PIXELFORMAT_D32:
+		res = GL_UNSIGNED_SHORT;
+		break;
+	case RENOIR_PIXELFORMAT_D24S8:
+		res = GL_UNSIGNED_INT_24_8;
+		break;
+	default:
+		assert(false && "unreachable");
+		break;
+	}
+	return res;
+}
+
+inline static GLenum
 _renoir_type_to_gl(RENOIR_TYPE type)
 {
 	GLenum res = 0;
 	switch (type)
 	{
-	case RENOIR_TYPE_UBYTE:
+	case RENOIR_TYPE_UINT8:
+	case RENOIR_TYPE_UINT8_4:
+	case RENOIR_TYPE_UINT8_4N:
 		res = GL_UNSIGNED_BYTE;
 		break;
-	case RENOIR_TYPE_UNSIGNED_SHORT:
+	case RENOIR_TYPE_UINT16:
 		res = GL_UNSIGNED_SHORT;
 		break;
-	case RENOIR_TYPE_SHORT:
+	case RENOIR_TYPE_INT16:
 		res = GL_SHORT;
 		break;
-	case RENOIR_TYPE_INT:
+	case RENOIR_TYPE_INT32:
 		res = GL_INT;
 		break;
 	case RENOIR_TYPE_FLOAT:
-	case RENOIR_TYPE_FLOAT2:
-	case RENOIR_TYPE_FLOAT3:
-	case RENOIR_TYPE_FLOAT4:
+	case RENOIR_TYPE_FLOAT_2:
+	case RENOIR_TYPE_FLOAT_3:
+	case RENOIR_TYPE_FLOAT_4:
 		res = GL_FLOAT;
 		break;
 	default:
@@ -431,25 +466,64 @@ _renoir_type_to_gl(RENOIR_TYPE type)
 	return res;
 }
 
+inline static size_t
+_renoir_type_to_size(RENOIR_TYPE type)
+{
+	size_t res = 0;
+	switch (type)
+	{
+	case RENOIR_TYPE_UINT8:
+		res = 1;
+		break;
+	case RENOIR_TYPE_UINT8_4:
+	case RENOIR_TYPE_UINT8_4N:
+	case RENOIR_TYPE_INT32:
+	case RENOIR_TYPE_FLOAT:
+		res = 4;
+		break;
+	case RENOIR_TYPE_INT16:
+	case RENOIR_TYPE_UINT16:
+		res = 2;
+		break;
+	case RENOIR_TYPE_FLOAT_2:
+		res = 8;
+		break;
+	case RENOIR_TYPE_FLOAT_3:
+		res = 12;
+		break;
+	case RENOIR_TYPE_FLOAT_4:
+		res = 16;
+		break;
+	default:
+		assert(false && "unreachable");
+		break;
+	}
+	return res;
+}
+
+
 inline static GLint
 _renoir_type_to_gl_element_count(RENOIR_TYPE type)
 {
 	GLint res = 0;
 	switch (type)
 	{
-	case RENOIR_TYPE_UBYTE:
-	case RENOIR_TYPE_SHORT:
-	case RENOIR_TYPE_INT:
+	case RENOIR_TYPE_UINT8:
+	case RENOIR_TYPE_UINT16:
+	case RENOIR_TYPE_INT16:
+	case RENOIR_TYPE_INT32:
 	case RENOIR_TYPE_FLOAT:
 		res = 1;
 		break;
-	case RENOIR_TYPE_FLOAT2:
+	case RENOIR_TYPE_FLOAT_2:
 		res = 2;
 		break;
-	case RENOIR_TYPE_FLOAT3:
+	case RENOIR_TYPE_FLOAT_3:
 		res = 3;
 		break;
-	case RENOIR_TYPE_FLOAT4:
+	case RENOIR_TYPE_FLOAT_4:
+	case RENOIR_TYPE_UINT8_4:
+	case RENOIR_TYPE_UINT8_4N:
 		res = 4;
 		break;
 	default:
@@ -457,6 +531,16 @@ _renoir_type_to_gl_element_count(RENOIR_TYPE type)
 		break;
 	}
 	return res;
+}
+
+inline static bool
+_renoir_type_normalized(RENOIR_TYPE type)
+{
+	switch (type)
+	{
+	case RENOIR_TYPE_UINT8_4N: return true;
+	default: return false;
+	}
 }
 
 inline static GLenum
@@ -600,6 +684,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_PASS_CLEAR,
 	RENOIR_COMMAND_KIND_USE_PIPELINE,
 	RENOIR_COMMAND_KIND_USE_PROGRAM,
+	RENOIR_COMMAND_KIND_SCISSOR,
 	RENOIR_COMMAND_KIND_BUFFER_WRITE,
 	RENOIR_COMMAND_KIND_TEXTURE_WRITE,
 	RENOIR_COMMAND_KIND_BUFFER_READ,
@@ -725,6 +810,11 @@ struct Renoir_Command
 		{
 			Renoir_Handle* program;
 		} use_program;
+
+		struct
+		{
+			int x, y, w, h;
+		} scissor;
 
 		struct
 		{
@@ -903,6 +993,7 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
 	case RENOIR_COMMAND_KIND_USE_PIPELINE:
 	case RENOIR_COMMAND_KIND_USE_PROGRAM:
+	case RENOIR_COMMAND_KIND_SCISSOR:
 	case RENOIR_COMMAND_KIND_BUFFER_READ:
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
@@ -1016,20 +1107,18 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 
 		h->texture.access = desc.access;
 		h->texture.pixel_format = desc.pixel_format;
-		h->texture.pixel_type = desc.pixel_type;
 		h->texture.usage = desc.usage;
 		h->texture.size = desc.size;
 
 		auto gl_internal_format = _renoir_pixelformat_to_internal_gl(desc.pixel_format);
 		auto gl_format = _renoir_pixelformat_to_gl(desc.pixel_format);
-		auto gl_type = _renoir_type_to_gl(desc.pixel_type);
-
-		glGenTextures(1, &h->texture.id);
+		auto gl_type = _renoir_pixelformat_to_type_gl(desc.pixel_format);
 
 		assert(desc.size.width > 0 && "a texture must have at least width");
 
 		if (desc.size.height == 0 && desc.size.depth == 0)
 		{
+			glCreateTextures(GL_TEXTURE_1D, 1, &h->texture.id);
 			// 1D texture
 			glTextureStorage1D(h->texture.id, 1, gl_internal_format, desc.size.width);
 			if (desc.data != nullptr)
@@ -1047,6 +1136,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		}
 		else if (desc.size.height > 0 && desc.size.depth == 0)
 		{
+			glCreateTextures(GL_TEXTURE_2D, 1, &h->texture.id);
 			// 2D texture
 			glTextureStorage2D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height);
 			if (desc.data != nullptr)
@@ -1066,6 +1156,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		}
 		else if (desc.size.height > 0 && desc.size.depth > 0)
 		{
+			glCreateTextures(GL_TEXTURE_3D, 1, &h->texture.id);
 			// 3D texture
 			glTextureStorage3D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height, desc.size.depth);
 			if (desc.data != nullptr)
@@ -1305,6 +1396,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			renoir_gl450_context_window_bind(self->ctx, h);
 			glBindFramebuffer(GL_FRAMEBUFFER, NULL);
 			glViewport(0, 0, h->view_window.width, h->view_window.height);
+			glDisable(GL_SCISSOR_TEST);
 		}
 		else
 		{
@@ -1384,6 +1476,19 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glDisable(GL_DEPTH_TEST);
 		}
 
+		switch (h->pipeline.desc.scissor)
+		{
+		case RENOIR_SWITCH_ENABLE:
+			glEnable(GL_SCISSOR_TEST);
+			break;
+		case RENOIR_SWITCH_DISABLE:
+			glDisable(GL_SCISSOR_TEST);
+			break;
+		default:
+			assert(false && "unreachable");
+			break;
+		}
+
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -1394,6 +1499,11 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		glUseProgram(self->current_program->program.id);
 		break;
 	}
+	case RENOIR_COMMAND_KIND_SCISSOR:
+	{
+		glScissor(command->scissor.x, command->scissor.y, command->scissor.w, command->scissor.h);
+		break;
+	}
 	case RENOIR_COMMAND_KIND_BUFFER_WRITE:
 	{
 		auto& h = command->buffer_write.handle;
@@ -1401,7 +1511,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			h->buffer.id,
 			command->buffer_write.offset,
 			command->buffer_write.bytes_size,
-			GL_MAP_WRITE_BIT | GL_MAP_UNSYNCHRONIZED_BIT
+			GL_MAP_WRITE_BIT
 		);
 		::memcpy(ptr, command->buffer_write.bytes, command->buffer_write.bytes_size);
 		glUnmapNamedBuffer(h->buffer.id);
@@ -1600,11 +1710,12 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 
 			GLint gl_size = _renoir_type_to_gl_element_count(vertex.type);
 			GLenum gl_type = _renoir_type_to_gl(vertex.type);
+			bool gl_normalized = _renoir_type_normalized(vertex.type);
 			glVertexAttribPointer(
 				GLuint(i),
 				gl_size,
 				gl_type,
-				false,
+				gl_normalized,
 				vertex.stride,
 				(void*)vertex.offset
 			);
@@ -1615,17 +1726,33 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		if (desc.index_buffer.handle != nullptr)
 		{
 			if (desc.index_type == RENOIR_TYPE_NONE)
-				desc.index_type = RENOIR_TYPE_UNSIGNED_SHORT;
+				desc.index_type = RENOIR_TYPE_UINT16;
 
 			auto gl_index_type = _renoir_type_to_gl(desc.index_type);
+			auto gl_index_type_size = _renoir_type_to_size(desc.index_type);
 
 			auto h = (Renoir_Handle*)desc.index_buffer.handle;
 			glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, h->buffer.id);
 
 			if (desc.instances_count > 1)
-				glDrawElementsInstanced(gl_primitive, desc.elements_count, gl_index_type, nullptr, desc.instances_count);
+			{
+				glDrawElementsInstanced(
+					gl_primitive,
+					desc.elements_count,
+					gl_index_type,
+					(void*)(desc.base_element * gl_index_type_size),
+					desc.instances_count
+				);
+			}
 			else
-				glDrawElements(gl_primitive, desc.elements_count, gl_index_type, nullptr);
+			{
+				glDrawElements(
+					gl_primitive,
+					desc.elements_count,
+					gl_index_type,
+					(void*)(desc.base_element * gl_index_type_size)
+				);
+			}
 		}
 		else
 		{
@@ -1800,6 +1927,9 @@ _renoir_gl450_buffer_free(Renoir* api, Renoir_Buffer buffer)
 static Renoir_Texture
 _renoir_gl450_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 {
+	if (desc.usage == RENOIR_USAGE_NONE)
+		desc.usage = RENOIR_USAGE_STATIC;
+
 	if (desc.usage == RENOIR_USAGE_STATIC && desc.access == RENOIR_ACCESS_NONE)
 	{
 		assert(false && "cpu can't read or write from static gpu buffer");
@@ -2058,6 +2188,9 @@ _renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 	if (desc.eq_alpha == RENOIR_BLEND_EQ_NONE)
 		desc.eq_alpha = RENOIR_BLEND_EQ_ADD;
 
+	if (desc.scissor == RENOIR_SWITCH_DEFAULT)
+		desc.scissor = RENOIR_SWITCH_DISABLE;
+
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
@@ -2204,6 +2337,23 @@ _renoir_gl450_use_program(Renoir* api, Renoir_Pass pass, Renoir_Program program)
 	mn::mutex_unlock(self->mtx);
 
 	command->use_program.program = (Renoir_Handle*)program.handle;
+	_renoir_gl450_command_push(&h->pass, command);
+}
+
+static void
+_renoir_gl450_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, int height)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SCISSOR);
+	mn::mutex_unlock(self->mtx);
+
+	command->scissor.x = x;
+	command->scissor.y = y;
+	command->scissor.w = width;
+	command->scissor.h = height;
 	_renoir_gl450_command_push(&h->pass, command);
 }
 
@@ -2384,6 +2534,7 @@ renoir_api()
 	_api.clear = _renoir_gl450_clear;
 	_api.use_pipeline = _renoir_gl450_use_pipeline;
 	_api.use_program = _renoir_gl450_use_program;
+	_api.scissor = _renoir_gl450_scissor;
 	_api.buffer_write = _renoir_gl450_buffer_write;
 	_api.texture_write = _renoir_gl450_texture_write;
 	_api.buffer_read = _renoir_gl450_buffer_read;

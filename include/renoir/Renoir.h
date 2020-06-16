@@ -44,7 +44,7 @@ typedef enum RENOIR_ACCESS {
 
 typedef enum RENOIR_PIXELFORMAT {
 	RENOIR_PIXELFORMAT_NONE,
-	RENOIR_PIXELFORMAT_RGBA,
+	RENOIR_PIXELFORMAT_RGBA8,
 	RENOIR_PIXELFORMAT_R16I,
 	RENOIR_PIXELFORMAT_R16F,
 	RENOIR_PIXELFORMAT_R32F,
@@ -56,14 +56,16 @@ typedef enum RENOIR_PIXELFORMAT {
 
 typedef enum RENOIR_TYPE {
 	RENOIR_TYPE_NONE,
-	RENOIR_TYPE_UBYTE,
-	RENOIR_TYPE_UNSIGNED_SHORT,
-	RENOIR_TYPE_SHORT,
-	RENOIR_TYPE_INT,
+	RENOIR_TYPE_UINT8,
+	RENOIR_TYPE_UINT8_4,
+	RENOIR_TYPE_UINT8_4N,
+	RENOIR_TYPE_UINT16,
+	RENOIR_TYPE_INT16,
+	RENOIR_TYPE_INT32,
 	RENOIR_TYPE_FLOAT,
-	RENOIR_TYPE_FLOAT2,
-	RENOIR_TYPE_FLOAT3,
-	RENOIR_TYPE_FLOAT4
+	RENOIR_TYPE_FLOAT_2,
+	RENOIR_TYPE_FLOAT_3,
+	RENOIR_TYPE_FLOAT_4
 } RENOIR_TYPE;
 
 typedef enum RENOIR_FACE {
@@ -111,35 +113,32 @@ typedef enum RENOIR_SEMANTIC {
 } RENOIR_SEMANTIC;
 
 typedef enum RENOIR_COMPARE {
-	RENOIR_COMPARE_NONE,
-	RENOIR_COMPARE_NEVER,
 	RENOIR_COMPARE_LESS,
 	RENOIR_COMPARE_EQUAL,
 	RENOIR_COMPARE_LESS_EQUAL,
 	RENOIR_COMPARE_GREATER,
 	RENOIR_COMPARE_NOT_EQUAL,
 	RENOIR_COMPARE_GREATER_EQUAL,
+	RENOIR_COMPARE_NEVER,
 	RENOIR_COMPARE_ALWAYS
 } RENOIR_COMPARE;
 
 typedef enum RENOIR_TEXMODE {
-	RENOIR_TEXMODE_NONE,
-	RENOIR_TEXMODE_CLAMP,
 	RENOIR_TEXMODE_WRAP,
+	RENOIR_TEXMODE_CLAMP,
 	RENOIR_TEXMODE_BORDER,
 	RENOIR_TEXMODE_MIRROR
 } RENOIR_TEXMODE;
 
 typedef enum RENOIR_FILTER {
-	RENOIR_FILTER_NONE,
-	RENOIR_FILTER_POINT,
-	RENOIR_FILTER_LINEAR
+	RENOIR_FILTER_LINEAR,
+	RENOIR_FILTER_POINT
 } RENOIR_FILTER;
 
 typedef enum RENOIR_PRIMITIVE {
-	RENOIR_PRIMITIVE_POINTS,
-	RENOIR_PRIMITIVE_LINES,
 	RENOIR_PRIMITIVE_TRIANGLES,
+	RENOIR_PRIMITIVE_POINTS,
+	RENOIR_PRIMITIVE_LINES
 } RENOIR_PRIMITIVE;
 
 typedef enum RENOIR_SWITCH {
@@ -173,6 +172,10 @@ typedef struct Renoir_View { void* handle; } Renoir_View;
 
 
 // Descriptons
+// it's recommended to memset all the description structs before using them
+// Desc desc;
+// memset(&desc, 0, sizeof(desc));
+// desc.field_of_interest = value;
 typedef struct Renoir_Size {
 	int width, height, depth;
 } Renoir_Size;
@@ -182,53 +185,58 @@ typedef struct Renoir_Color {
 } Renoir_Color;
 
 typedef struct Renoir_Settings {
-	bool defer_api_calls;
-	RENOIR_MSAA_MODE msaa;
-	RENOIR_VSYNC_MODE vsync;
+	bool defer_api_calls; // default: false
+	RENOIR_MSAA_MODE msaa; // default: RENOIR_MSAA_MODE_NONE
+	RENOIR_VSYNC_MODE vsync; // default: RENOIR_VSYNC_MODE_ON
 } Renoir_Settings;
 
 typedef struct Renoir_Pipeline_Desc {
-	RENOIR_SWITCH cull;
-	RENOIR_FACE cull_face;
-	RENOIR_ORIENTATION cull_front;
+	RENOIR_SWITCH cull; // default: RENOIR_SWITCH_ENABLE
+	RENOIR_FACE cull_face; // default: RENOIR_FACE_BACK
+	RENOIR_ORIENTATION cull_front; // default: RENOIR_ORIENTATION_CCW
 
-	RENOIR_SWITCH depth;
+	RENOIR_SWITCH depth; // default: RENOIR_SWITCH_ENABLE
 
-	RENOIR_SWITCH blend;
-	RENOIR_BLEND src_rgb, dst_rgb, src_alpha, dst_alpha;
-	RENOIR_BLEND_EQ eq_rgb, eq_alpha;
+	RENOIR_SWITCH blend; // default: RENOIR_SWITCH_ENABLE
+	RENOIR_BLEND src_rgb; // default: RENOIR_BLEND_SRC_ALPHA
+	RENOIR_BLEND dst_rgb; // default: RENOIR_BLEND_ONE_MINUS_SRC_ALPHA
+	RENOIR_BLEND src_alpha; // default: RENOIR_BLEND_ZERO
+	RENOIR_BLEND dst_alpha; // default: RENOIR_BLEND_ONE
+	RENOIR_BLEND_EQ eq_rgb; // default: RENOIR_BLEND_EQ_ADD
+	RENOIR_BLEND_EQ eq_alpha; // default: RENOIR_BLEND_EQ_ADD
+
+	RENOIR_SWITCH scissor; // default: RENOIR_SWITCH_DISABLE
 } Pipeline_Desc;
 
 typedef struct Renoir_Buffer_Desc {
 	RENOIR_BUFFER type;
-	RENOIR_USAGE usage;
-	RENOIR_ACCESS access;
-	void* data;
+	RENOIR_USAGE usage; // default: RENOIR_USAGE_STATIC
+	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
+	void* data; // you can pass null here to only allocate buffer without initializing it
 	size_t data_size;
 } Renoir_Buffer_Desc;
 
 typedef struct Renoir_Texture_Desc {
-	Renoir_Size size;
-	RENOIR_USAGE usage;
-	RENOIR_ACCESS access;
+	Renoir_Size size; // you can only fill what you need (1D = width, 2D = width, and height, 3D = width, height, and depth)
+	RENOIR_USAGE usage; // default: RENOIR_USAGE_STATIC
+	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
 	RENOIR_PIXELFORMAT pixel_format;
-	RENOIR_TYPE pixel_type;
-	void* data;
+	void* data; // you can pass null here to only allocate texture without initializing it
 	size_t data_size;
 } Renoir_Texture_Desc;
 
 typedef struct Renoir_Sampler_Desc {
-	RENOIR_FILTER filter;
-	RENOIR_TEXMODE u;
-	RENOIR_TEXMODE v;
-	RENOIR_TEXMODE w;
-	RENOIR_COMPARE compare;
-	Renoir_Color border;
+	RENOIR_FILTER filter; // default: RENOIR_FILTER_LINEAR
+	RENOIR_TEXMODE u; // default: RENOIR_TEXMODE_WRAP
+	RENOIR_TEXMODE v; // default: RENOIR_TEXMODE_WRAP
+	RENOIR_TEXMODE w; // default: RENOIR_TEXMODE_WRAP
+	RENOIR_COMPARE compare; // default: RENOIR_COMPARE_LESS
+	Renoir_Color border; // default: black
 } Renoir_Sampler_Desc;
 
 typedef struct Renoir_Shader_Blob {
 	const char* bytes;
-	size_t size;
+	size_t size; // you can set size = 0 it will assume it's a null terminating string and will calc its strlen
 } Renoir_Shader_Blob;
 
 typedef struct Renoir_Program_Desc {
@@ -242,7 +250,7 @@ typedef struct Renoir_Compute_Desc {
 } Renoir_Compute_Desc;
 
 typedef struct Renoir_Clear_Desc {
-	RENOIR_CLEAR flags;
+	RENOIR_CLEAR flags; // default: RENOIR_CLEAR_COLOR
 	Renoir_Color color;
 	float depth;
 	uint8_t stencil;
@@ -256,13 +264,13 @@ typedef struct Renoir_Vertex_Desc {
 } Renoir_Vertex_Desc;
 
 typedef struct Renoir_Draw_Desc {
-	RENOIR_PRIMITIVE primitive;
+	RENOIR_PRIMITIVE primitive; // default: RENOIR_PRIMITIVE_TRIANGLES
 	int base_element;
 	int elements_count;
 	int instances_count;
 	Renoir_Vertex_Desc vertex_buffers[10];
 	Renoir_Buffer index_buffer;
-	RENOIR_TYPE index_type;
+	RENOIR_TYPE index_type; // default: RENOIR_TYPE_UINT16
 } Renoir_Draw_Desc;
 
 typedef struct Renoir_Texture_Edit_Desc {
@@ -316,6 +324,7 @@ typedef struct Renoir
 	void (*clear)(struct Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc);
 	void (*use_pipeline)(struct Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeline);
 	void (*use_program)(struct Renoir* api, Renoir_Pass pass, Renoir_Program program);
+	void (*scissor)(struct Renoir* api, Renoir_Pass pass, int x, int y, int width, int height);
 	// Write Functions
 	void (*buffer_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size);
 	void (*texture_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc);
