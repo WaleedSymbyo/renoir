@@ -122,16 +122,16 @@ int main()
 		draw.elements_count = 3;
 		// position
 		draw.vertex_buffers[0].buffer = vertices;
-		draw.vertex_buffers[0].type = RENOIR_TYPE_FLOAT2;
+		draw.vertex_buffers[0].type = RENOIR_TYPE_FLOAT_2;
 		draw.vertex_buffers[0].stride = 5 * sizeof(float);
 
 		draw.vertex_buffers[1].buffer = vertices;
-		draw.vertex_buffers[1].type = RENOIR_TYPE_FLOAT3;
+		draw.vertex_buffers[1].type = RENOIR_TYPE_FLOAT_3;
 		draw.vertex_buffers[1].stride = 5 * sizeof(float);
 		draw.vertex_buffers[1].offset = 8;
 
 		draw.index_buffer = indices;
-		draw.index_type = RENOIR_TYPE_UNSIGNED_SHORT;
+		draw.index_type = RENOIR_TYPE_UINT16;
 		gfx->draw(gfx, pass, draw);
 
 		gfx->pass_end(gfx, pass);

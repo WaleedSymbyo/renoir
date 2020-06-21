@@ -26,7 +26,7 @@ elseif(APPLE)
 endif()
 
 # add library target
-add_library(renoir-gl450)
+add_library(renoir-gl450 SHARED)
 
 target_sources(renoir-gl450
 	PRIVATE ${HEADER_FILES}

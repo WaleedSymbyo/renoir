@@ -25,7 +25,7 @@ elseif(APPLE)
 endif()
 
 # add library target
-add_library(renoir-window)
+add_library(renoir-window SHARED)
 
 target_sources(renoir-window
 	PRIVATE ${HEADER_FILES}
@@ -63,6 +63,4 @@ generate_export_header(renoir-window
 target_include_directories(renoir-window
 	PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/include
-	# PRIVATE
-	# ${CMAKE_CURRENT_SOURCE_DIR}/src
 )

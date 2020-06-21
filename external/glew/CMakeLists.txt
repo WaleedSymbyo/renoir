@@ -17,7 +17,7 @@ set(SOURCE_FILES
 
 
 # add library target
-add_library(glew
+add_library(glew STATIC
 	${HEADER_FILES}
 	${SOURCE_FILES}
 )

@@ -2492,57 +2492,83 @@ _renoir_gl450_draw(Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc)
 	_renoir_gl450_command_push(&h->pass, command);
 }
 
-static Renoir _api;
+inline static void
+_renoir_load_api(Renoir* api)
+{
+	api->init = _renoir_gl450_init;
+	api->dispose = _renoir_gl450_dispose;
+
+	api->handle_ref = _renoir_gl450_handle_ref;
+
+	api->view_window_new = _renoir_gl450_view_window_new;
+	api->view_free = _renoir_gl450_view_free;
+	api->view_resize = _renoir_gl450_view_resize;
+	api->view_present = _renoir_gl450_view_present;
+
+	api->buffer_new = _renoir_gl450_buffer_new;
+	api->buffer_free = _renoir_gl450_buffer_free;
+
+	api->texture_new = _renoir_gl450_texture_new;
+	api->texture_free = _renoir_gl450_texture_free;
+
+	api->sampler_new = _renoir_gl450_sampler_new;
+	api->sampler_free = _renoir_gl450_sampler_free;
+
+	api->program_check = _renoir_gl450_program_check;
+	api->program_new = _renoir_gl450_program_new;
+	api->program_free = _renoir_gl450_program_free;
+
+	api->compute_new = _renoir_gl450_compute_new;
+	api->compute_free = _renoir_gl450_compute_free;
+
+	api->pipeline_new = _renoir_gl450_pipeline_new;
+	api->pipeline_free = _renoir_gl450_pipeline_free;
+
+	api->pass_new = _renoir_gl450_pass_new;
+	api->pass_free = _renoir_gl450_pass_free;
+
+	api->pass_begin = _renoir_gl450_pass_begin;
+	api->pass_end = _renoir_gl450_pass_end;
+	api->clear = _renoir_gl450_clear;
+	api->use_pipeline = _renoir_gl450_use_pipeline;
+	api->use_program = _renoir_gl450_use_program;
+	api->scissor = _renoir_gl450_scissor;
+	api->buffer_write = _renoir_gl450_buffer_write;
+	api->texture_write = _renoir_gl450_texture_write;
+	api->buffer_read = _renoir_gl450_buffer_read;
+	api->texture_read = _renoir_gl450_texture_read;
+	api->buffer_bind = _renoir_gl450_buffer_bind;
+	api->texture_bind = _renoir_gl450_texture_bind;
+	api->sampler_bind = _renoir_gl450_sampler_bind;
+	api->draw = _renoir_gl450_draw;
+}
 
 Renoir*
 renoir_api()
 {
-	_api.init = _renoir_gl450_init;
-	_api.dispose = _renoir_gl450_dispose;
-
-	_api.handle_ref = _renoir_gl450_handle_ref;
-
-	_api.view_window_new = _renoir_gl450_view_window_new;
-	_api.view_free = _renoir_gl450_view_free;
-	_api.view_resize = _renoir_gl450_view_resize;
-	_api.view_present = _renoir_gl450_view_present;
-
-	_api.buffer_new = _renoir_gl450_buffer_new;
-	_api.buffer_free = _renoir_gl450_buffer_free;
-
-	_api.texture_new = _renoir_gl450_texture_new;
-	_api.texture_free = _renoir_gl450_texture_free;
-
-	_api.sampler_new = _renoir_gl450_sampler_new;
-	_api.sampler_free = _renoir_gl450_sampler_free;
-
-	_api.program_check = _renoir_gl450_program_check;
-	_api.program_new = _renoir_gl450_program_new;
-	_api.program_free = _renoir_gl450_program_free;
-
-	_api.compute_new = _renoir_gl450_compute_new;
-	_api.compute_free = _renoir_gl450_compute_free;
-
-	_api.pipeline_new = _renoir_gl450_pipeline_new;
-	_api.pipeline_free = _renoir_gl450_pipeline_free;
-
-	_api.pass_new = _renoir_gl450_pass_new;
-	_api.pass_free = _renoir_gl450_pass_free;
-
-	_api.pass_begin = _renoir_gl450_pass_begin;
-	_api.pass_end = _renoir_gl450_pass_end;
-	_api.clear = _renoir_gl450_clear;
-	_api.use_pipeline = _renoir_gl450_use_pipeline;
-	_api.use_program = _renoir_gl450_use_program;
-	_api.scissor = _renoir_gl450_scissor;
-	_api.buffer_write = _renoir_gl450_buffer_write;
-	_api.texture_write = _renoir_gl450_texture_write;
-	_api.buffer_read = _renoir_gl450_buffer_read;
-	_api.texture_read = _renoir_gl450_texture_read;
-	_api.buffer_bind = _renoir_gl450_buffer_bind;
-	_api.texture_bind = _renoir_gl450_texture_bind;
-	_api.sampler_bind = _renoir_gl450_sampler_bind;
-	_api.draw = _renoir_gl450_draw;
-
+	static Renoir _api;
+	_renoir_load_api(&_api);
 	return &_api;
+}
+
+void*
+rad_api(void* api, bool reload)
+{
+	if (api == nullptr)
+	{
+		auto self = mn::alloc_zerod<Renoir>();
+		_renoir_load_api(self);
+		return self;
+	}
+	else if (api != nullptr && reload)
+	{
+		_renoir_load_api((Renoir*)api);
+		return api;
+	}
+	else if (api != nullptr && reload)
+	{
+		mn::free((Renoir*)api);
+		return nullptr;
+	}
+	return nullptr;
 }
