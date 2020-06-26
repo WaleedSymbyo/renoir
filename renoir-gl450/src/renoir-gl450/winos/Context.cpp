@@ -335,3 +335,12 @@ renoir_gl450_context_window_present(Renoir_GL450_Context* self, Renoir_Handle* h
 {
 	SwapBuffers((HDC)h->view_window.hdc);
 }
+
+void
+renoir_gl450_context_reload(Renoir_GL450_Context* self)
+{
+	wglMakeCurrent((HDC)self->dummy_dc, (HGLRC)self->context);
+	GLenum glew_result = glewInit();
+	assert(glew_result == GLEW_OK && "glewInit failed");
+	(void)glew_result;
+}

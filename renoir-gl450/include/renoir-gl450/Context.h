@@ -29,3 +29,6 @@ renoir_gl450_context_unbind(Renoir_GL450_Context* self);
 
 void
 renoir_gl450_context_window_present(Renoir_GL450_Context* self, Renoir_Handle* h);
+
+void
+renoir_gl450_context_reload(Renoir_GL450_Context* self);

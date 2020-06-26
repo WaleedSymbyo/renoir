@@ -2557,7 +2557,9 @@ rad_api(void* api, bool reload)
 	}
 	else if (api != nullptr && reload)
 	{
-		_renoir_load_api((Renoir*)api);
+		auto self = (Renoir*)api;
+		_renoir_load_api(self);
+		renoir_gl450_context_reload(self->ctx->ctx);
 		return api;
 	}
 	else if (api != nullptr && reload == false)
