@@ -1930,11 +1930,6 @@ _renoir_gl450_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 	if (desc.usage == RENOIR_USAGE_NONE)
 		desc.usage = RENOIR_USAGE_STATIC;
 
-	if (desc.usage == RENOIR_USAGE_STATIC && desc.access == RENOIR_ACCESS_NONE)
-	{
-		assert(false && "cpu can't read or write from static gpu buffer");
-	}
-
 	if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access == RENOIR_ACCESS_NONE)
 	{
 		assert(false && "a dynamic buffer with cpu access set to none is a static buffer");
@@ -2551,7 +2546,7 @@ renoir_api()
 	return &_api;
 }
 
-void*
+extern "C" RENOIR_GL450_EXPORT void*
 rad_api(void* api, bool reload)
 {
 	if (api == nullptr)
@@ -2565,7 +2560,7 @@ rad_api(void* api, bool reload)
 		_renoir_load_api((Renoir*)api);
 		return api;
 	}
-	else if (api != nullptr && reload)
+	else if (api != nullptr && reload == false)
 	{
 		mn::free((Renoir*)api);
 		return nullptr;

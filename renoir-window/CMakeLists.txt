@@ -25,7 +25,7 @@ elseif(APPLE)
 endif()
 
 # add library target
-add_library(renoir-window SHARED)
+add_library(renoir-window)
 
 target_sources(renoir-window
 	PRIVATE ${HEADER_FILES}

@@ -15,13 +15,14 @@ include(GNUInstallDirs)
 # Needed for CMAKE_DEPENDENT_OPTION macro
 include(CMakeDependentOption)
 
+option(RENOIR_GLSLANG_STATIC "Build glslang as a static library" ON)
 option(BUILD_SHARED_LIBS "Build Shared Libraries" OFF)
 option(BUILD_EXTERNAL "Build external dependencies in /External" ON)
 
-set(LIB_TYPE STATIC)
+set(LIB_TYPE SHARED)
 
-if(BUILD_SHARED_LIBS)
-    set(LIB_TYPE SHARED)
+if(RENOIR_GLSLANG_STATIC)
+    set(LIB_TYPE STATIC)
 endif()
 
 option(SKIP_GLSLANG_INSTALL "Skip installation" ${SKIP_GLSLANG_INSTALL})

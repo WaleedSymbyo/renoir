@@ -339,6 +339,8 @@ typedef struct Renoir
 	void (*draw)(struct Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc);
 } Renoir;
 
+#define RENOIR_API "renoir"
+
 #if __cplusplus
 }
 #endif

@@ -26,18 +26,10 @@ add_library(glew STATIC
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HEADER_FILES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_FILES})
 
-
-if(BUILD_SHARED_LIBS)
-	target_compile_definitions(glew
-		PRIVATE
-			GLEW_BUILD=1
-	)
-else()
-	target_compile_definitions(glew
-		PUBLIC
-			GLEW_STATIC=1
-	)
-endif()
+target_compile_definitions(glew
+	PUBLIC
+		GLEW_STATIC=1
+)
 
 # Windows specfic flags to enable W variations of winapi
 if(WIN32)

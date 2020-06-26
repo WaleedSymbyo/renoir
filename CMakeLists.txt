@@ -23,6 +23,7 @@ add_subdirectory(renoir-gl450)
 
 add_library(renoir INTERFACE)
 target_include_directories(renoir INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+add_dependencies(renoir renoir-gl450)
 
 if (RENOIR_BUILD_EXAMPLES)
 	add_subdirectory(examples)

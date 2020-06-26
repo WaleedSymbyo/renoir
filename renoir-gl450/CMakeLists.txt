@@ -26,7 +26,7 @@ elseif(APPLE)
 endif()
 
 # add library target
-add_library(renoir-gl450 SHARED)
+add_library(renoir-gl450)
 
 target_sources(renoir-gl450
 	PRIVATE ${HEADER_FILES}
@@ -57,11 +57,9 @@ source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_FILES})
 
 # enable C++17
 # disable any compiler specifc extensions
-# add d suffix in debug mode
 target_compile_features(renoir-gl450 PUBLIC cxx_std_17)
 set_target_properties(renoir-gl450 PROPERTIES
 	CXX_EXTENSIONS OFF
-	DEBUG_POSTFIX d
 )
 
 # generate exports header file
