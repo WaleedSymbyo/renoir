@@ -7,7 +7,7 @@ struct Renoir_GL450_Context;
 struct Renoir_Settings;
 
 Renoir_GL450_Context*
-renoir_gl450_context_new(Renoir_Settings* settings);
+renoir_gl450_context_new(Renoir_Settings* settings, void* display);
 
 void
 renoir_gl450_context_free(Renoir_GL450_Context* self);

@@ -38,13 +38,15 @@ int main()
 
 	Renoir_Settings settings{};
 	settings.defer_api_calls = false;
-	bool ok = gfx->init(gfx, settings);
-	assert(ok && "gfx init failed");
 
-	Renoir_Window* window = renoir_window_new(800, 600, "Mostafa");
+	Renoir_Window* window = renoir_window_new(800, 600, "Mostafa", (RENOIR_WINDOW_MSAA_MODE)settings.msaa);
 
 	void *handle, *display;
 	renoir_window_native_handles(window, &handle, &display);
+
+	bool ok = gfx->init(gfx, settings, display);
+	assert(ok && "gfx init failed");
+
 	Renoir_View view = gfx->view_window_new(gfx, 800, 600, handle, display);
 
 	bool dbg = gfx->program_check(gfx, RENOIR_SHADER_VERTEX, vertex_shader, 0, nullptr, 0);
@@ -108,7 +110,7 @@ int main()
 		gfx->pass_begin(gfx, pass, view);
 
 		Renoir_Clear_Desc clear{};
-		clear.flags = RENOIR_CLEAR(RENOIR_CLEAR_COLOR|RENOIR_CLEAR_DEPTH); 
+		clear.flags = RENOIR_CLEAR(RENOIR_CLEAR_COLOR|RENOIR_CLEAR_DEPTH);
 		clear.color = {0.0f, 0.0f, 0.0f, 1.0f};
 		clear.depth = 1.0f;
 		clear.stencil = 0;

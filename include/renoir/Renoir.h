@@ -286,7 +286,7 @@ typedef struct Renoir
 {
 	struct IRenoir* ctx;
 
-	bool (*init)(struct Renoir* self, Renoir_Settings settings);
+	bool (*init)(struct Renoir* self, Renoir_Settings settings, void* display);
 	void (*dispose)(struct Renoir* self);
 
 	void (*handle_ref)(struct Renoir* self, void* handle);

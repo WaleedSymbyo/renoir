@@ -19,6 +19,7 @@ if(WIN32)
 	)
 elseif(UNIX AND NOT APPLE)
 	set(SOURCE_FILES ${SOURCE_FILES}
+		src/renoir-gl450/linux/Context.cpp
 	)
 elseif(APPLE)
 	set(SOURCE_FILES ${SOURCE_FILES}
@@ -34,6 +35,8 @@ target_sources(renoir-gl450
 			${PROJECT_SOURCE_DIR}/include/renoir/Renoir.h
 )
 
+set_target_properties(renoir-gl450 PROPERTIES PREFIX "")
+
 if (RENOIR_UNITY_BUILD)
 	set_target_properties(renoir-gl450
 		PROPERTIES UNITY_BUILD_BATCH_SIZE 0
@@ -43,12 +46,14 @@ endif()
 add_library(Renoir::renoir-gl450 ALIAS renoir-gl450)
 
 target_link_libraries(renoir-gl450
-	PRIVATE
-		glew
+	PUBLIC
 		SPIRV
 		glslang
+	PRIVATE
+		glew
 		mn
 		"$<$<PLATFORM_ID:Windows>:opengl32>"
+		"$<$<PLATFORM_ID:Linux>:X11;GL;GLU>"
 )
 
 # make it reflect the same structure as the one on disk

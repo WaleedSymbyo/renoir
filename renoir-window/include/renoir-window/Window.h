@@ -161,6 +161,13 @@ typedef struct Renoir_Event {
 	};
 } Renoir_Event;
 
+typedef enum RENOIR_WINDOW_MSAA_MODE {
+	RENOIR_WINDOW_MSAA_MODE_NONE = 0,
+	RENOIR_WINDOW_MSAA_MODE_2 = 2,
+	RENOIR_WINDOW_MSAA_MODE_4 = 4,
+	RENOIR_WINDOW_MSAA_MODE_8 = 8
+} RENOIR_WINDOW_MSAA_MODE;
+
 typedef struct Renoir_Window {
 	int width, height;
 	const char* title;
@@ -168,7 +175,7 @@ typedef struct Renoir_Window {
 } Renoir_Window;
 
 RENOIR_WINDOW_EXPORT Renoir_Window*
-renoir_window_new(int width, int height, const char* title);
+renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_MODE msaa);
 
 RENOIR_WINDOW_EXPORT void
 renoir_window_free(Renoir_Window* self);

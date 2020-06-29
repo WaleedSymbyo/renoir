@@ -66,7 +66,7 @@ _renoir_gl450_msaa_to_int(RENOIR_MSAA_MODE mode)
 
 // API
 Renoir_GL450_Context*
-renoir_gl450_context_new(Renoir_Settings* settings)
+renoir_gl450_context_new(Renoir_Settings* settings, void*)
 {
 	HGLRC fake_ctx = NULL;
 	HDC fake_dc = NULL;

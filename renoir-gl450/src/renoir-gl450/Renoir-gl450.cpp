@@ -1245,9 +1245,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		glGetShaderiv(vertex_shader, GL_COMPILE_STATUS, &success);
 		if (success == GL_FALSE)
 		{
-			glGetShaderiv(vertex_shader, GL_INFO_LOG_LENGTH, &size);
-			size = size > error_length ? error_length : size;
-			glGetShaderInfoLog(vertex_shader, size, &size, error);
+			::memset(error, 0, sizeof(error));
+			glGetShaderInfoLog(vertex_shader, error_length, &size, error);
 			mn::log_error("vertex shader compile error\n{}", error);
 			break;
 		}
@@ -1259,9 +1258,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		glGetShaderiv(pixel_shader, GL_COMPILE_STATUS, &success);
 		if (success == GL_FALSE)
 		{
-			glGetShaderiv(pixel_shader, GL_INFO_LOG_LENGTH, &size);
-			size = size > error_length ? error_length : size;
-			glGetShaderInfoLog(pixel_shader, size, &size, error);
+			::memset(error, 0, sizeof(error));
+			glGetShaderInfoLog(pixel_shader, error_length, &size, error);
 			mn::log_error("pixel shader compile error\n{}", error);
 			break;
 		}
@@ -1276,9 +1274,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glGetShaderiv(geometry_shader, GL_COMPILE_STATUS, &success);
 			if (success == GL_FALSE)
 			{
-				glGetShaderiv(geometry_shader, GL_INFO_LOG_LENGTH, &size);
-				size = size > error_length ? error_length : size;
-				glGetShaderInfoLog(geometry_shader, size, &size, error);
+				::memset(error, 0, sizeof(error));
+				glGetShaderInfoLog(geometry_shader, error_length, &size, error);
 				mn::log_error("pixel shader compile error\n{}", error);
 				break;
 			}
@@ -1695,7 +1692,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_DRAW:
 	{
 		auto& desc = command->draw.desc;
-
 		glBindVertexArray(self->vao);
 
 		for (size_t i = 0; i < 10; ++i)
@@ -1772,9 +1768,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 
 // API
 static bool
-_renoir_gl450_init(Renoir* api, Renoir_Settings settings)
+_renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 {
-	auto ctx = renoir_gl450_context_new(&settings);
+	auto ctx = renoir_gl450_context_new(&settings, display);
 	if (ctx == NULL)
 		return false;
 
@@ -1788,7 +1784,7 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings)
 	renoir_gl450_context_bind(ctx);
 	glCreateVertexArrays(1, &self->vao);
 	assert(_renoir_gl450_check());
-
+	
 	api->ctx = self;
 	
 	return true;

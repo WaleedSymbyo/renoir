@@ -40,6 +40,12 @@ endif()
 
 add_library(Renoir::renoir-window ALIAS renoir-window)
 
+target_link_libraries(renoir-window
+	PRIVATE
+		"$<$<PLATFORM_ID:Linux>:X11;GL;GLU>"
+		MoustaphaSaad::mn
+)
+
 # make it reflect the same structure as the one on disk
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HEADER_FILES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_FILES})
