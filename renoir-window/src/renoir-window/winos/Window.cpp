@@ -1,5 +1,7 @@
 #include "renoir-window/Window.h"
 
+#include <mn/Memory.h>
+
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
@@ -7,7 +9,6 @@
 #undef DELETE
 
 #include <assert.h>
-#include <stdlib.h>
 
 typedef struct Renoir_Window_WinOS {
 	Renoir_Window window;
@@ -367,11 +368,11 @@ _renoir_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 
 // API
 Renoir_Window*
-renoir_window_new(int width, int height, const char* title)
+renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_MODE)
 {
 	assert(width > 0 && height > 0);
-	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)malloc(sizeof(*self));
-	memset(self, 0, sizeof(*self));
+
+	auto self = mn::alloc_zerod<Renoir_Window_WinOS>();
 
 	self->window.width = width;
 	self->window.height = height;
@@ -427,7 +428,7 @@ renoir_window_free(Renoir_Window* window)
 	assert(result && "ReleaseDC Failed");
 	result = DestroyWindow(self->handle);
 	assert(result && "DestroyWindow Failed");
-	free(self);
+	mn::free(self);
 }
 
 Renoir_Event
