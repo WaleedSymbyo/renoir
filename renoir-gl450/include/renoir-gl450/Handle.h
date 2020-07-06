@@ -57,7 +57,6 @@ struct Renoir_Handle
 			RENOIR_USAGE usage;
 			RENOIR_ACCESS access;
 			RENOIR_PIXELFORMAT pixel_format;
-			RENOIR_TYPE pixel_type;
 		} texture;
 
 		struct

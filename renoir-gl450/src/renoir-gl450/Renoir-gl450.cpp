@@ -1519,7 +1519,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto& h = command->texture_write.handle;
 		auto gl_format = _renoir_pixelformat_to_gl(h->texture.pixel_format);
-		auto gl_type = _renoir_type_to_gl(h->texture.pixel_type);
+		auto gl_type = _renoir_pixelformat_to_type_gl(h->texture.pixel_format);
 		if (h->texture.size.height == 0 && h->texture.size.depth == 0)
 		{
 			// 1D texture
@@ -1586,7 +1586,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto& h = command->texture_read.handle;
 		auto gl_format = _renoir_pixelformat_to_gl(h->texture.pixel_format);
-		auto gl_type = _renoir_type_to_gl(h->texture.pixel_type);
+		auto gl_type = _renoir_pixelformat_to_type_gl(h->texture.pixel_format);
 		if (h->texture.size.height == 0 && h->texture.size.depth == 0)
 		{
 			// 1D texture
