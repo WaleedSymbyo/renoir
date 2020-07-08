@@ -664,8 +664,8 @@ _renoir_primitive_to_gl(RENOIR_PRIMITIVE p)
 enum RENOIR_COMMAND_KIND
 {
 	RENOIR_COMMAND_KIND_NONE,
-	RENOIR_COMMAND_KIND_VIEW_WINDOW_INIT,
-	RENOIR_COMMAND_KIND_VIEW_FREE,
+	RENOIR_COMMAND_KIND_SWAPCHAIN_NEW,
+	RENOIR_COMMAND_KIND_SWAPCHAIN_FREE,
 	RENOIR_COMMAND_KIND_PASS_NEW,
 	RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW,
 	RENOIR_COMMAND_KIND_PASS_FREE,
@@ -706,17 +706,17 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
-		} view_window_init;
+		} swapchain_new;
 
 		struct
 		{
 			Renoir_Handle* handle;
-		} view_free;
+		} swapchain_free;
 
 		struct
 		{
 			Renoir_Handle* handle;
-			Renoir_Handle* view;
+			Renoir_Handle* swapchain;
 		} pass_new;
 
 		struct
@@ -992,8 +992,8 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 		break;
 	}
 	case RENOIR_COMMAND_KIND_NONE:
-	case RENOIR_COMMAND_KIND_VIEW_WINDOW_INIT:
-	case RENOIR_COMMAND_KIND_VIEW_FREE:
+	case RENOIR_COMMAND_KIND_SWAPCHAIN_NEW:
+	case RENOIR_COMMAND_KIND_SWAPCHAIN_FREE:
 	case RENOIR_COMMAND_KIND_PASS_NEW:
 	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
 	case RENOIR_COMMAND_KIND_PASS_FREE:
@@ -1059,25 +1059,26 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 {
 	switch(command->kind)
 	{
-	case RENOIR_COMMAND_KIND_VIEW_WINDOW_INIT:
+	case RENOIR_COMMAND_KIND_SWAPCHAIN_NEW:
 	{
-		renoir_gl450_context_window_init(self->ctx, command->view_window_init.handle, &self->settings);
+		renoir_gl450_context_window_init(self->ctx, command->swapchain_new.handle, &self->settings);
 		assert(_renoir_gl450_check());
 		break;
 	}
-	case RENOIR_COMMAND_KIND_VIEW_FREE:
+	case RENOIR_COMMAND_KIND_SWAPCHAIN_FREE:
 	{
-		auto& h = command->view_free.handle;
+		auto& h = command->swapchain_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
-		renoir_gl450_context_window_free(self->ctx, command->view_free.handle);
+		renoir_gl450_context_window_free(self->ctx, h);
 		assert(_renoir_gl450_check());
+		_renoir_gl450_handle_free(self, h);
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_NEW:
 	{
 		auto& h = command->pass_new.handle;
-		h->pass.view = command->pass_new.view;
+		h->pass.swapchain = command->pass_new.swapchain;
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
@@ -1544,16 +1545,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	{
 		auto& h = command->pass_begin.handle;
-		auto view = h->pass.view;
-		// if this is an on screen/window view
-		if (view && view->kind == RENOIR_HANDLE_KIND_VIEW_WINDOW)
+		// if this is an on screen/window
+		if (auto swapchain = h->pass.swapchain)
 		{
-			renoir_gl450_context_window_bind(self->ctx, view);
+			renoir_gl450_context_window_bind(self->ctx, swapchain);
 			glBindFramebuffer(GL_FRAMEBUFFER, NULL);
-			glViewport(0, 0, view->view_window.width, view->view_window.height);
+			glViewport(0, 0, swapchain->swapchain.width, swapchain->swapchain.height);
 			glDisable(GL_SCISSOR_TEST);
 		}
-		// this is an off screen view
+		// this is an off screen
 		else if (h->pass.fb != 0)
 		{
 			glBindFramebuffer(GL_FRAMEBUFFER, h->pass.fb);
@@ -2021,54 +2021,54 @@ _renoir_gl450_handle_ref(Renoir* api, void* handle)
 	h->rc.fetch_add(1);
 }
 
-static Renoir_View
-_renoir_gl450_view_window_new(Renoir* api, int width, int height, void* window, void* display)
+static Renoir_Swapchain
+_renoir_gl450_swapchain_new(Renoir* api, int width, int height, void* window, void* display)
 {
 	auto self = api->ctx;
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_VIEW_WINDOW);
-	h->view_window.width = width;
-	h->view_window.height = height;
-	h->view_window.handle = window;
-	h->view_window.display = display;
+	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_SWAPCHAIN);
+	h->swapchain.width = width;
+	h->swapchain.height = height;
+	h->swapchain.handle = window;
+	h->swapchain.display = display;
 
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_VIEW_WINDOW_INIT);
-	command->view_window_init.handle = h;
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SWAPCHAIN_NEW);
+	command->swapchain_new.handle = h;
 	_renoir_gl450_command_process(self, command);
-	return Renoir_View{h};
+	return Renoir_Swapchain{h};
 }
 
 static void
-_renoir_gl450_view_free(Renoir* api, Renoir_View view)
+_renoir_gl450_swapchain_free(Renoir* api, Renoir_Swapchain swapchain)
 {
 	auto self = api->ctx;
-	auto h = (Renoir_Handle*)view.handle;
+	auto h = (Renoir_Handle*)swapchain.handle;
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_VIEW_FREE);
-	command->view_free.handle = h;
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SWAPCHAIN_FREE);
+	command->swapchain_free.handle = h;
 	_renoir_gl450_command_process(self, command);
 }
 
 static void
-_renoir_gl450_view_resize(Renoir*, Renoir_View view, int width, int height)
+_renoir_gl450_swapchain_resize(Renoir*, Renoir_Swapchain swapchain, int width, int height)
 {
-	auto h = (Renoir_Handle*)view.handle;
+	auto h = (Renoir_Handle*)swapchain.handle;
 
-	h->view_window.width = width;
-	h->view_window.height = height;
+	h->swapchain.width = width;
+	h->swapchain.height = height;
 }
 
 static void
-_renoir_gl450_view_present(Renoir* api, Renoir_View view)
+_renoir_gl450_swapchain_present(Renoir* api, Renoir_Swapchain swapchain)
 {
 	auto self = api->ctx;
-	auto h = (Renoir_Handle*)view.handle;
+	auto h = (Renoir_Handle*)swapchain.handle;
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -2080,14 +2080,7 @@ _renoir_gl450_view_present(Renoir* api, Renoir_View view)
 		_renoir_gl450_command_free(self, it);
 	}
 
-	if (h->kind == RENOIR_HANDLE_KIND_VIEW_WINDOW)
-	{
-		renoir_gl450_context_window_present(self->ctx, h);
-	}
-	else
-	{
-		assert(false && "unreachable");
-	}
+	renoir_gl450_context_window_present(self->ctx, h);
 }
 
 static Renoir_Buffer
@@ -2420,7 +2413,7 @@ _renoir_gl450_pipeline_free(Renoir* api, Renoir_Pipeline pipeline)
 }
 
 static Renoir_Pass
-_renoir_gl450_pass_new(Renoir* api, Renoir_View view)
+_renoir_gl450_pass_new(Renoir* api, Renoir_Swapchain swapchain)
 {
 	auto self = api->ctx;
 
@@ -2430,7 +2423,7 @@ _renoir_gl450_pass_new(Renoir* api, Renoir_View view)
 	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PASS);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_NEW);
 	command->pass_new.handle = h;
-	command->pass_new.view = (Renoir_Handle*)view.handle;
+	command->pass_new.swapchain = (Renoir_Handle*)swapchain.handle;
 	_renoir_gl450_command_process(self, command);
 	return Renoir_Pass{h};
 }
@@ -2728,10 +2721,10 @@ _renoir_load_api(Renoir* api)
 
 	api->handle_ref = _renoir_gl450_handle_ref;
 
-	api->view_window_new = _renoir_gl450_view_window_new;
-	api->view_free = _renoir_gl450_view_free;
-	api->view_resize = _renoir_gl450_view_resize;
-	api->view_present = _renoir_gl450_view_present;
+	api->swapchain_new = _renoir_gl450_swapchain_new;
+	api->swapchain_free = _renoir_gl450_swapchain_free;
+	api->swapchain_resize = _renoir_gl450_swapchain_resize;
+	api->swapchain_present = _renoir_gl450_swapchain_present;
 
 	api->buffer_new = _renoir_gl450_buffer_new;
 	api->buffer_free = _renoir_gl450_buffer_free;

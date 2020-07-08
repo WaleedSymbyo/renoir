@@ -11,7 +11,7 @@ struct Renoir_Command;
 enum RENOIR_HANDLE_KIND
 {
 	RENOIR_HANDLE_KIND_NONE,
-	RENOIR_HANDLE_KIND_VIEW_WINDOW,
+	RENOIR_HANDLE_KIND_SWAPCHAIN,
 	RENOIR_HANDLE_KIND_PASS,
 	RENOIR_HANDLE_KIND_BUFFER,
 	RENOIR_HANDLE_KIND_TEXTURE,
@@ -34,14 +34,14 @@ struct Renoir_Handle
 			void* handle;
 			void* display;
 			void* hdc;
-		} view_window;
+		} swapchain;
 
 		struct
 		{
 			Renoir_Command *command_list_head;
 			Renoir_Command *command_list_tail;
 			// used when rendering is done on screen/window
-			Renoir_Handle* view;
+			Renoir_Handle* swapchain;
 			// used when rendering is done off screen
 			GLuint fb;
 			int width, height;

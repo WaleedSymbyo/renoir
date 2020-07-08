@@ -204,7 +204,7 @@ renoir_gl450_context_free(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, Renoir_Settings* settings)
 {
-	bool result = glXMakeCurrent(self->display, (GLXDrawable)h->view_window.handle, self->context);
+	bool result = glXMakeCurrent(self->display, (GLXDrawable)h->swapchain.handle, self->context);
 	assert(result && "glXMakeCurrent");
 	(void) result;
 
@@ -215,10 +215,10 @@ renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, R
 	switch (settings->vsync)
 	{
 	case RENOIR_VSYNC_MODE_ON:
-		swap_interval(self->display, (GLXDrawable)h->view_window.handle, 1);
+		swap_interval(self->display, (GLXDrawable)h->swapchain.handle, 1);
 		break;
 	case RENOIR_VSYNC_MODE_OFF:
-		swap_interval(self->display, (GLXDrawable)h->view_window.handle, 0);
+		swap_interval(self->display, (GLXDrawable)h->swapchain.handle, 0);
 		break;
 	default:
 		assert(false && "unreachable");
@@ -235,7 +235,7 @@ renoir_gl450_context_window_free(Renoir_GL450_Context* self, Renoir_Handle* h)
 void
 renoir_gl450_context_window_bind(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
-	bool result = glXMakeCurrent(self->display, (GLXDrawable)h->view_window.handle, self->context);
+	bool result = glXMakeCurrent(self->display, (GLXDrawable)h->swapchain.handle, self->context);
 	assert(result && "glXMakeCurrent");
 }
 
@@ -256,7 +256,7 @@ renoir_gl450_context_unbind(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_window_present(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
-	glXSwapBuffers(self->display, (Window)h->view_window.handle);
+	glXSwapBuffers(self->display, (Window)h->swapchain.handle);
 }
 
 void

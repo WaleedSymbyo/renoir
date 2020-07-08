@@ -259,8 +259,8 @@ renoir_gl450_context_free(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, Renoir_Settings* settings)
 {
-	auto hdc = GetDC((HWND)h->view_window.handle);
-	h->view_window.hdc = hdc;
+	auto hdc = GetDC((HWND)h->swapchain.handle);
+	h->swapchain.hdc = hdc;
 
 	// setup the modern pixel format in order to create the modern GL Context
 	const int pixel_attribs[] = {
@@ -309,13 +309,13 @@ renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, R
 void
 renoir_gl450_context_window_free(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
-	ReleaseDC((HWND)h->view_window.handle, (HDC)h->view_window.hdc);
+	ReleaseDC((HWND)h->swapchain.handle, (HDC)h->swapchain.hdc);
 }
 
 void
 renoir_gl450_context_window_bind(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
-	wglMakeCurrent((HDC)h->view_window.hdc, (HGLRC)self->context);
+	wglMakeCurrent((HDC)h->swapchain.hdc, (HGLRC)self->context);
 }
 
 void
@@ -333,7 +333,7 @@ renoir_gl450_context_unbind(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_window_present(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
-	SwapBuffers((HDC)h->view_window.hdc);
+	SwapBuffers((HDC)h->swapchain.hdc);
 }
 
 void

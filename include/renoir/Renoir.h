@@ -168,7 +168,7 @@ typedef struct Renoir_Program { void* handle; } Renoir_Program;
 typedef struct Renoir_Compute { void* handle; } Renoir_Compute;
 typedef struct Renoir_Geometry { void* handle; } Renoir_Geometry;
 typedef struct Renoir_Pass { void* handle; } Renoir_Pass;
-typedef struct Renoir_View { void* handle; } Renoir_View;
+typedef struct Renoir_Swapchain { void* handle; } Renoir_Swapchain;
 
 
 // Descriptons
@@ -298,10 +298,10 @@ typedef struct Renoir
 
 	void (*handle_ref)(struct Renoir* self, void* handle);
 
-	Renoir_View (*view_window_new)(struct Renoir* api, int width, int height, void* window, void* display);
-	void (*view_free)(struct Renoir* api, Renoir_View view);
-	void (*view_resize)(struct Renoir* api, Renoir_View view, int width, int height);
-	void (*view_present)(struct Renoir* api, Renoir_View view);
+	Renoir_Swapchain (*swapchain_new)(struct Renoir* api, int width, int height, void* window, void* display);
+	void (*swapchain_free)(struct Renoir* api, Renoir_Swapchain view);
+	void (*swapchain_resize)(struct Renoir* api, Renoir_Swapchain view, int width, int height);
+	void (*swapchain_present)(struct Renoir* api, Renoir_Swapchain view);
 
 	Renoir_Buffer (*buffer_new)(struct Renoir* api, Renoir_Buffer_Desc desc);
 	void (*buffer_free)(struct Renoir* api, Renoir_Buffer buffer);
@@ -322,7 +322,7 @@ typedef struct Renoir
 	Renoir_Pipeline (*pipeline_new)(struct Renoir* api, Renoir_Pipeline_Desc desc);
 	void (*pipeline_free)(struct Renoir* api, Renoir_Pipeline pipeline);
 
-	Renoir_Pass (*pass_new)(struct Renoir* api, Renoir_View view);
+	Renoir_Pass (*pass_new)(struct Renoir* api, Renoir_Swapchain view);
 	Renoir_Pass (*pass_offscreen_new)(struct Renoir* api, Renoir_Pass_Offscreen_Desc desc);
 	void (*pass_free)(struct Renoir* api, Renoir_Pass pass);
 
