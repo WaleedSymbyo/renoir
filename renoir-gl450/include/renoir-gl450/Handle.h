@@ -40,6 +40,12 @@ struct Renoir_Handle
 		{
 			Renoir_Command *command_list_head;
 			Renoir_Command *command_list_tail;
+			// used when rendering is done on screen/window
+			Renoir_Handle* view;
+			// used when rendering is done off screen
+			GLuint fb;
+			int width, height;
+			Renoir_Pass_Offscreen_Desc offscreen;
 		} pass;
 
 		struct
@@ -57,6 +63,9 @@ struct Renoir_Handle
 			RENOIR_USAGE usage;
 			RENOIR_ACCESS access;
 			RENOIR_PIXELFORMAT pixel_format;
+			bool render_target;
+			RENOIR_MSAA_MODE msaa;
+			GLuint render_buffer;
 		} texture;
 
 		struct

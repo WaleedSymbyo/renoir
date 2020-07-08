@@ -667,6 +667,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_VIEW_WINDOW_INIT,
 	RENOIR_COMMAND_KIND_VIEW_FREE,
 	RENOIR_COMMAND_KIND_PASS_NEW,
+	RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW,
 	RENOIR_COMMAND_KIND_PASS_FREE,
 	RENOIR_COMMAND_KIND_BUFFER_NEW,
 	RENOIR_COMMAND_KIND_BUFFER_FREE,
@@ -681,6 +682,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_PIPELINE_NEW,
 	RENOIR_COMMAND_KIND_PIPELINE_FREE,
 	RENOIR_COMMAND_KIND_PASS_BEGIN,
+	RENOIR_COMMAND_KIND_PASS_END,
 	RENOIR_COMMAND_KIND_PASS_CLEAR,
 	RENOIR_COMMAND_KIND_USE_PIPELINE,
 	RENOIR_COMMAND_KIND_USE_PROGRAM,
@@ -714,7 +716,14 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
+			Renoir_Handle* view;
 		} pass_new;
+
+		struct
+		{
+			Renoir_Handle* handle;
+			Renoir_Pass_Offscreen_Desc desc;
+		} pass_offscreen_new;
 
 		struct
 		{
@@ -793,8 +802,13 @@ struct Renoir_Command
 
 		struct
 		{
-			Renoir_Handle* view;
+			Renoir_Handle* handle;
 		} pass_begin;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} pass_end;
 
 		struct
 		{
@@ -885,6 +899,7 @@ struct IRenoir
 	Renoir_Handle* current_pipeline;
 	Renoir_Handle* current_program;
 	GLuint vao;
+	GLuint msaa_resolve_fb;
 };
 
 static void
@@ -980,6 +995,7 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_VIEW_WINDOW_INIT:
 	case RENOIR_COMMAND_KIND_VIEW_FREE:
 	case RENOIR_COMMAND_KIND_PASS_NEW:
+	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
 	case RENOIR_COMMAND_KIND_PASS_FREE:
 	case RENOIR_COMMAND_KIND_BUFFER_FREE:
 	case RENOIR_COMMAND_KIND_TEXTURE_FREE:
@@ -990,6 +1006,7 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PIPELINE_NEW:
 	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
+	case RENOIR_COMMAND_KIND_PASS_END:
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
 	case RENOIR_COMMAND_KIND_USE_PIPELINE:
 	case RENOIR_COMMAND_KIND_USE_PROGRAM:
@@ -1059,7 +1076,98 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PASS_NEW:
 	{
-		// nothing to do here
+		auto& h = command->pass_new.handle;
+		h->pass.view = command->pass_new.view;
+		break;
+	}
+	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
+	{
+		auto& h = command->pass_offscreen_new.handle;
+		auto& desc = command->pass_offscreen_new.desc;
+		h->pass.offscreen = desc;
+
+		int width = -1;
+		int height = -1;
+		int msaa = -1;
+		
+		glCreateFramebuffers(1, &h->pass.fb);
+		for (size_t i = 0; i < 4; ++i)
+		{
+			auto color = (Renoir_Handle*)desc.color[i].handle;
+			if (color == nullptr)
+				continue;
+
+			_renoir_gl450_handle_ref(color);
+			if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			{
+				glNamedFramebufferRenderbuffer(h->pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer);
+			}
+			else
+			{
+				glNamedFramebufferTexture(h->pass.fb, GL_COLOR_ATTACHMENT0+i, color->texture.id, 0);
+			}
+
+			// first time getting the width/height
+			if (width == -1 && height == -1)
+			{
+				width = color->texture.size.width;
+				height = color->texture.size.height;
+			}
+			else
+			{
+				assert(color->texture.size.width == width);
+				assert(color->texture.size.height == height);
+			}
+
+			// check that all of them has the same msaa
+			if (msaa == -1)
+			{
+				msaa = color->texture.msaa;
+			}
+			else
+			{
+				assert(msaa == color->texture.msaa);
+			}
+		}
+
+		auto depth = (Renoir_Handle*)desc.depth_stencil.handle;
+		if (depth)
+		{
+			_renoir_gl450_handle_ref(depth);
+			if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			{
+				glNamedFramebufferRenderbuffer(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer);
+			}
+			else
+			{
+				glNamedFramebufferTexture(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+			}
+
+			// first time getting the width/height
+			if (width == -1 && height == -1)
+			{
+				width = depth->texture.size.width;
+				height = depth->texture.size.height;
+			}
+			else
+			{
+				assert(depth->texture.size.width == width);
+				assert(depth->texture.size.height == height);
+			}
+
+			// check that all of them has the same msaa
+			if (msaa == -1)
+			{
+				msaa = depth->texture.msaa;
+			}
+			else
+			{
+				assert(msaa == depth->texture.msaa);
+			}
+		}
+		assert(glCheckNamedFramebufferStatus(h->pass.fb, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+		h->pass.width = width;
+		h->pass.height = height;
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_FREE:
@@ -1067,8 +1175,37 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto& h = command->pass_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
+		
 		for(auto it = h->pass.command_list_head; it != NULL; it = it->next)
 			_renoir_gl450_command_free(self, command);
+		
+		// free all the bound textures if it's a framebuffer pass
+		if (h->pass.fb != 0)
+		{
+			for (size_t i = 0; i < 4; ++i)
+			{
+				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
+				if (color == nullptr)
+					continue;
+				
+				// issue command to free the color texture
+				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+				command->texture_free.handle = color;
+				_renoir_gl450_command_execute(self, command);
+				_renoir_gl450_command_free(self, command);
+			}
+
+			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.handle;
+			if (depth)
+			{
+				// issue command to free the depth texture
+				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+				command->texture_free.handle = depth;
+				_renoir_gl450_command_execute(self, command);
+				_renoir_gl450_command_free(self, command);
+			}
+		}
+
 		_renoir_gl450_handle_free(self, h);
 		assert(_renoir_gl450_check());
 		break;
@@ -1109,6 +1246,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		h->texture.pixel_format = desc.pixel_format;
 		h->texture.usage = desc.usage;
 		h->texture.size = desc.size;
+		h->texture.render_target = desc.render_target;
+		h->texture.msaa = desc.msaa;
 
 		auto gl_internal_format = _renoir_pixelformat_to_internal_gl(desc.pixel_format);
 		auto gl_format = _renoir_pixelformat_to_gl(desc.pixel_format);
@@ -1153,6 +1292,19 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					desc.data
 				);
 			}
+
+			// create renderbuffer to handle msaa
+			if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
+			{
+				glCreateRenderbuffers(1, &h->texture.render_buffer);
+				glNamedRenderbufferStorageMultisample(
+					h->texture.render_buffer,
+					(GLsizei)desc.msaa,
+					gl_internal_format,
+					desc.size.width,
+					desc.size.height
+				);
+			}
 		}
 		else if (desc.size.height > 0 && desc.size.depth > 0)
 		{
@@ -1185,6 +1337,10 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		glDeleteTextures(1, &h->texture.id);
+		if (h->texture.render_buffer != 0)
+		{
+			glDeleteRenderbuffers(1, &h->texture.render_buffer);
+		}
 		_renoir_gl450_handle_free(self, h);
 		assert(_renoir_gl450_check());
 		break;
@@ -1387,17 +1543,72 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	{
-		auto h = command->pass_begin.view;
-		if (h->kind == RENOIR_HANDLE_KIND_VIEW_WINDOW)
+		auto& h = command->pass_begin.handle;
+		auto view = h->pass.view;
+		// if this is an on screen/window view
+		if (view && view->kind == RENOIR_HANDLE_KIND_VIEW_WINDOW)
 		{
-			renoir_gl450_context_window_bind(self->ctx, h);
+			renoir_gl450_context_window_bind(self->ctx, view);
 			glBindFramebuffer(GL_FRAMEBUFFER, NULL);
-			glViewport(0, 0, h->view_window.width, h->view_window.height);
+			glViewport(0, 0, view->view_window.width, view->view_window.height);
+			glDisable(GL_SCISSOR_TEST);
+		}
+		// this is an off screen view
+		else if (h->pass.fb != 0)
+		{
+			glBindFramebuffer(GL_FRAMEBUFFER, h->pass.fb);
+			glViewport(0, 0, h->pass.width, h->pass.height);
 			glDisable(GL_SCISSOR_TEST);
 		}
 		else
 		{
 			assert(false && "unreachable");
+		}
+		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_PASS_END:
+	{
+		auto& h = command->pass_end.handle;
+		// if this is an off screen view with msaa we'll need to issue a read command to move the data
+		// from renderbuffer to the texture
+		for (size_t i = 0; i < 4; ++i)
+		{
+			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
+			if (color == nullptr)
+				continue;
+
+			// only resolve msaa textures
+			if (color->texture.msaa == RENOIR_MSAA_MODE_NONE)
+				continue;
+
+			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0, color->texture.id, 0);
+			glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+			glNamedFramebufferReadBuffer(h->pass.fb, GL_COLOR_ATTACHMENT0 + i);
+			glBlitNamedFramebuffer(
+				h->pass.fb,
+				self->msaa_resolve_fb,
+				0, 0, h->pass.width, h->pass.height,
+				0, 0, h->pass.width, h->pass.height,
+				GL_COLOR_BUFFER_BIT,
+				GL_NEAREST
+			);
+		}
+		assert(_renoir_gl450_check());
+
+		// resolve depth textures as well
+		auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.handle;
+		if (depth && depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+		{
+			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+			glBlitNamedFramebuffer(
+				h->pass.fb,
+				self->msaa_resolve_fb,
+				0, 0, h->pass.width, h->pass.height,
+				0, 0, h->pass.width, h->pass.height,
+				GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+				GL_NEAREST
+			);
 		}
 		assert(_renoir_gl450_check());
 		break;
@@ -1783,6 +1994,8 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 
 	renoir_gl450_context_bind(ctx);
 	glCreateVertexArrays(1, &self->vao);
+	assert(_renoir_gl450_check());
+	glCreateFramebuffers(1, &self->msaa_resolve_fb);
 	assert(_renoir_gl450_check());
 	
 	api->ctx = self;
@@ -2207,7 +2420,7 @@ _renoir_gl450_pipeline_free(Renoir* api, Renoir_Pipeline pipeline)
 }
 
 static Renoir_Pass
-_renoir_gl450_pass_new(Renoir* api)
+_renoir_gl450_pass_new(Renoir* api, Renoir_View view)
 {
 	auto self = api->ctx;
 
@@ -2217,6 +2430,24 @@ _renoir_gl450_pass_new(Renoir* api)
 	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PASS);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_NEW);
 	command->pass_new.handle = h;
+	command->pass_new.view = (Renoir_Handle*)view.handle;
+	_renoir_gl450_command_process(self, command);
+	return Renoir_Pass{h};
+}
+
+static Renoir_Pass
+_renoir_gl450_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
+{
+	auto self = api->ctx;
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PASS);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW);
+	command->pass_offscreen_new.handle = h;
+	command->pass_offscreen_new.desc = desc;
+	_renoir_gl450_command_process(self, command);
 	return Renoir_Pass{h};
 }
 
@@ -2236,7 +2467,7 @@ _renoir_gl450_pass_free(Renoir* api, Renoir_Pass pass)
 
 // Graphics Commands
 static void
-_renoir_gl450_pass_begin(Renoir* api, Renoir_Pass pass, Renoir_View view)
+_renoir_gl450_pass_begin(Renoir* api, Renoir_Pass pass)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
@@ -2247,7 +2478,7 @@ _renoir_gl450_pass_begin(Renoir* api, Renoir_Pass pass, Renoir_View view)
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_BEGIN);
-	command->pass_begin.view = (Renoir_Handle*)view.handle;
+	command->pass_begin.handle = h;
 	_renoir_gl450_command_push(&h->pass, command);
 }
 
@@ -2260,6 +2491,12 @@ _renoir_gl450_pass_end(Renoir* api, Renoir_Pass pass)
 	if (h->pass.command_list_head != nullptr)
 	{
 		mn::mutex_lock(self->mtx);
+
+		// push the pass end command
+		auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_END);
+		command->pass_end.handle = h;
+		_renoir_gl450_command_push(&h->pass, command);
+
 		// push the commands to the end of command list, if the user requested to defer api calls
 		if (self->settings.defer_api_calls)
 		{
@@ -2519,6 +2756,7 @@ _renoir_load_api(Renoir* api)
 	api->pass_free = _renoir_gl450_pass_free;
 
 	api->pass_begin = _renoir_gl450_pass_begin;
+	api->pass_offscreen_new = _renoir_gl450_pass_offscreen_new;
 	api->pass_end = _renoir_gl450_pass_end;
 	api->clear = _renoir_gl450_clear;
 	api->use_pipeline = _renoir_gl450_use_pipeline;

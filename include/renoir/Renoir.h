@@ -220,6 +220,8 @@ typedef struct Renoir_Texture_Desc {
 	Renoir_Size size; // you can only fill what you need (1D = width, 2D = width, and height, 3D = width, height, and depth)
 	RENOIR_USAGE usage; // default: RENOIR_USAGE_STATIC
 	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
+	bool render_target; // default: false
+	RENOIR_MSAA_MODE msaa; // default: RENOIR_MSAA_MODE_NONE
 	RENOIR_PIXELFORMAT pixel_format;
 	void* data; // you can pass null here to only allocate texture without initializing it
 	size_t data_size;
@@ -280,6 +282,11 @@ typedef struct Renoir_Texture_Edit_Desc {
 	size_t bytes_size;
 } Renoir_Texture_Read_Desc;
 
+typedef struct Renoir_Pass_Offscreen_Desc {
+	Renoir_Texture color[4];
+	Renoir_Texture depth_stencil;
+} Renoir_Pass_Offscreen_Desc;
+
 struct IRenoir;
 
 typedef struct Renoir
@@ -315,11 +322,12 @@ typedef struct Renoir
 	Renoir_Pipeline (*pipeline_new)(struct Renoir* api, Renoir_Pipeline_Desc desc);
 	void (*pipeline_free)(struct Renoir* api, Renoir_Pipeline pipeline);
 
-	Renoir_Pass (*pass_new)(struct Renoir* api);
+	Renoir_Pass (*pass_new)(struct Renoir* api, Renoir_View view);
+	Renoir_Pass (*pass_offscreen_new)(struct Renoir* api, Renoir_Pass_Offscreen_Desc desc);
 	void (*pass_free)(struct Renoir* api, Renoir_Pass pass);
 
 	// Graphics Commands
-	void (*pass_begin)(struct Renoir* api, Renoir_Pass pass, Renoir_View view);
+	void (*pass_begin)(struct Renoir* api, Renoir_Pass pass);
 	void (*pass_end)(struct Renoir* api, Renoir_Pass pass);
 	void (*clear)(struct Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc);
 	void (*use_pipeline)(struct Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeline);
