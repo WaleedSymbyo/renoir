@@ -7,6 +7,12 @@
 extern "C" {
 #endif
 
+typedef enum RENOIR_CONSTANT {
+	RENOIR_CONSTANT_SAMPLER_CACHE_SIZE = 32,
+	RENOIR_CONSTANT_DRAW_VERTEX_BUFFER_SIZE = 10,
+	RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE = 4
+} RENOIR_CONSTANT;
+
 // Enums
 typedef enum RENOIR_CLEAR {
 	RENOIR_CLEAR_COLOR = 1 << 0,
@@ -163,10 +169,8 @@ typedef enum RENOIR_VSYNC_MODE {
 typedef struct Renoir_Buffer { void* handle; } Renoir_Buffer;
 typedef struct Renoir_Pipeline { void* handle; } Renoir_Pipeline;
 typedef struct Renoir_Texture { void* handle; } Renoir_Texture;
-typedef struct Renoir_Sampler { void* handle; } Renoir_Sampler;
 typedef struct Renoir_Program { void* handle; } Renoir_Program;
 typedef struct Renoir_Compute { void* handle; } Renoir_Compute;
-typedef struct Renoir_Geometry { void* handle; } Renoir_Geometry;
 typedef struct Renoir_Pass { void* handle; } Renoir_Pass;
 typedef struct Renoir_Swapchain { void* handle; } Renoir_Swapchain;
 
@@ -216,17 +220,6 @@ typedef struct Renoir_Buffer_Desc {
 	size_t data_size;
 } Renoir_Buffer_Desc;
 
-typedef struct Renoir_Texture_Desc {
-	Renoir_Size size; // you can only fill what you need (1D = width, 2D = width, and height, 3D = width, height, and depth)
-	RENOIR_USAGE usage; // default: RENOIR_USAGE_STATIC
-	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
-	bool render_target; // default: false
-	RENOIR_MSAA_MODE msaa; // default: RENOIR_MSAA_MODE_NONE
-	RENOIR_PIXELFORMAT pixel_format;
-	void* data; // you can pass null here to only allocate texture without initializing it
-	size_t data_size;
-} Renoir_Texture_Desc;
-
 typedef struct Renoir_Sampler_Desc {
 	RENOIR_FILTER filter; // default: RENOIR_FILTER_LINEAR
 	RENOIR_TEXMODE u; // default: RENOIR_TEXMODE_WRAP
@@ -235,6 +228,18 @@ typedef struct Renoir_Sampler_Desc {
 	RENOIR_COMPARE compare; // default: RENOIR_COMPARE_LESS
 	Renoir_Color border; // default: black
 } Renoir_Sampler_Desc;
+
+typedef struct Renoir_Texture_Desc {
+	Renoir_Size size; // you can only fill what you need (1D = width, 2D = width, and height, 3D = width, height, and depth)
+	RENOIR_USAGE usage; // default: RENOIR_USAGE_STATIC
+	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
+	bool render_target; // default: false
+	RENOIR_MSAA_MODE msaa; // default: RENOIR_MSAA_MODE_NONE
+	Renoir_Sampler_Desc sampler; // default: see sampler default
+	RENOIR_PIXELFORMAT pixel_format;
+	void* data; // you can pass null here to only allocate texture without initializing it
+	size_t data_size;
+} Renoir_Texture_Desc;
 
 typedef struct Renoir_Shader_Blob {
 	const char* bytes;
@@ -270,7 +275,7 @@ typedef struct Renoir_Draw_Desc {
 	int base_element;
 	int elements_count;
 	int instances_count;
-	Renoir_Vertex_Desc vertex_buffers[10];
+	Renoir_Vertex_Desc vertex_buffers[RENOIR_CONSTANT_DRAW_VERTEX_BUFFER_SIZE];
 	Renoir_Buffer index_buffer;
 	RENOIR_TYPE index_type; // default: RENOIR_TYPE_UINT16
 } Renoir_Draw_Desc;
@@ -283,7 +288,7 @@ typedef struct Renoir_Texture_Edit_Desc {
 } Renoir_Texture_Read_Desc;
 
 typedef struct Renoir_Pass_Offscreen_Desc {
-	Renoir_Texture color[4];
+	Renoir_Texture color[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
 	Renoir_Texture depth_stencil;
 } Renoir_Pass_Offscreen_Desc;
 
@@ -308,9 +313,6 @@ typedef struct Renoir
 
 	Renoir_Texture (*texture_new)(struct Renoir* api, Renoir_Texture_Desc desc);
 	void (*texture_free)(struct Renoir* api, Renoir_Texture texture);
-
-	Renoir_Sampler (*sampler_new)(struct Renoir* api, Renoir_Sampler_Desc desc);
-	void (*sampler_free)(struct Renoir* api, Renoir_Sampler sampler);
 
 	bool (*program_check)(struct Renoir* api, RENOIR_SHADER stage, const char* bytes, size_t bytes_size, char* error, size_t error_size);
 	Renoir_Program (*program_new)(struct Renoir* api, Renoir_Program_Desc desc);
@@ -342,7 +344,7 @@ typedef struct Renoir
 	// Bind Functions
 	void (*buffer_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, RENOIR_SHADER shader, int slot);
 	void (*texture_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot);
-	void (*sampler_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Sampler sampler, RENOIR_SHADER shader, int slot);
+	void (*texture_sampler_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler);
 	// Draw
 	void (*draw)(struct Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc);
 } Renoir;

@@ -62,6 +62,7 @@ struct Renoir_Handle
 			Renoir_Size size;
 			RENOIR_USAGE usage;
 			RENOIR_ACCESS access;
+			Renoir_Sampler_Desc default_sampler_desc;
 			RENOIR_PIXELFORMAT pixel_format;
 			bool render_target;
 			RENOIR_MSAA_MODE msaa;

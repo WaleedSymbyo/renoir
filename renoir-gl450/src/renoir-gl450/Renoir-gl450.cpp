@@ -693,7 +693,6 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_TEXTURE_READ,
 	RENOIR_COMMAND_KIND_BUFFER_BIND,
 	RENOIR_COMMAND_KIND_TEXTURE_BIND,
-	RENOIR_COMMAND_KIND_SAMPLER_BIND,
 	RENOIR_COMMAND_KIND_DRAW
 };
 
@@ -870,14 +869,8 @@ struct Renoir_Command
 			Renoir_Handle* handle;
 			RENOIR_SHADER shader;
 			int slot;
+			Renoir_Handle* sampler;
 		} texture_bind;
-
-		struct
-		{
-			Renoir_Handle* handle;
-			RENOIR_SHADER shader;
-			int slot;
-		} sampler_bind;
 
 		struct
 		{
@@ -900,6 +893,7 @@ struct IRenoir
 	Renoir_Handle* current_program;
 	GLuint vao;
 	GLuint msaa_resolve_fb;
+	mn::Buf<Renoir_Handle*> sampler_cache;
 };
 
 static void
@@ -1015,7 +1009,6 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
-	case RENOIR_COMMAND_KIND_SAMPLER_BIND:
 	case RENOIR_COMMAND_KIND_DRAW:
 	default:
 		// do nothing
@@ -1092,7 +1085,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		int msaa = -1;
 		
 		glCreateFramebuffers(1, &h->pass.fb);
-		for (size_t i = 0; i < 4; ++i)
+		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)desc.color[i].handle;
 			if (color == nullptr)
@@ -1249,6 +1242,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		h->texture.size = desc.size;
 		h->texture.render_target = desc.render_target;
 		h->texture.msaa = desc.msaa;
+		h->texture.default_sampler_desc = desc.sampler;
 
 		auto gl_internal_format = _renoir_pixelformat_to_internal_gl(desc.pixel_format);
 		auto gl_format = _renoir_pixelformat_to_gl(desc.pixel_format);
@@ -1572,7 +1566,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto& h = command->pass_end.handle;
 		// if this is an off screen view with msaa we'll need to issue a read command to move the data
 		// from renderbuffer to the texture
-		for (size_t i = 0; i < 4; ++i)
+		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
 			if (color == nullptr)
@@ -1874,6 +1868,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		}
 		else
 		{
+			glActiveTexture(GL_TEXTURE0 + command->texture_bind.slot);
 			if (h->texture.size.height == 0 && h->texture.size.depth == 0)
 			{
 				// 1D texture
@@ -1889,14 +1884,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				// 3D texture
 				glBindTexture(GL_TEXTURE_3D, h->texture.id);
 			}
+			// bind the used sampler
+			glBindSampler(command->texture_bind.slot, command->texture_bind.sampler->sampler.id);
 		}
-		assert(_renoir_gl450_check());
-		break;
-	}
-	case RENOIR_COMMAND_KIND_SAMPLER_BIND:
-	{
-		auto& h = command->sampler_bind.handle;
-		glBindSampler(command->sampler_bind.slot, h->sampler.id);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -1905,7 +1895,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto& desc = command->draw.desc;
 		glBindVertexArray(self->vao);
 
-		for (size_t i = 0; i < 10; ++i)
+		for (size_t i = 0; i < RENOIR_CONSTANT_DRAW_VERTEX_BUFFER_SIZE; ++i)
 		{
 			auto& vertex = desc.vertex_buffers[i];
 			if (vertex.buffer.handle == nullptr)
@@ -1977,10 +1967,110 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 }
 
+inline static Renoir_Handle*
+_renoir_gl450_sampler_new(Renoir* api, Renoir_Sampler_Desc desc)
+{
+	auto self = api->ctx;
+
+	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_SAMPLER);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_NEW);
+	command->sampler_new.handle = h;
+	command->sampler_new.desc = desc;
+	_renoir_gl450_command_process(self, command);
+	return h;
+}
+
+inline static void
+_renoir_gl450_sampler_free(Renoir* api, Renoir_Handle* h)
+{
+	auto self = api->ctx;
+
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_FREE);
+	command->sampler_free.handle = h;
+	_renoir_gl450_command_process(self, command);
+}
+
+inline static bool
+operator==(const Renoir_Sampler_Desc& a, const Renoir_Sampler_Desc& b)
+{
+	return (
+		a.filter == b.filter &&
+		a.u == b.u &&
+		a.v == b.v &&
+		a.w == b.w &&
+		a.compare == b.compare &&
+		a.border.r == b.border.r &&
+		a.border.g == b.border.g &&
+		a.border.b == b.border.b &&
+		a.border.a == b.border.a
+	);
+}
+
+inline static Renoir_Handle*
+_renoir_gl450_sampler_get(Renoir* api, Renoir_Sampler_Desc desc)
+{
+	auto self = (IRenoir*)api->ctx;
+	size_t best_ix = self->sampler_cache.count;
+	size_t first_empty_ix = self->sampler_cache.count;
+	for (size_t i = 0; i < self->sampler_cache.count; ++i)
+	{
+		auto hsampler = self->sampler_cache[i];
+		if (hsampler == nullptr)
+		{
+			if (first_empty_ix == self->sampler_cache.count)
+				first_empty_ix = i;
+			continue;
+		}
+
+		if (desc == hsampler->sampler.desc)
+		{
+			best_ix = i;
+			break;
+		}
+	}
+
+	// we found what we were looking for
+	if (best_ix < self->sampler_cache.count)
+	{
+		auto res = self->sampler_cache[best_ix];
+		// reorder the cache
+		for (size_t i = 0; i + 1 < best_ix; ++i)
+		{
+			auto index = best_ix - i - 1;
+			self->sampler_cache[index] = self->sampler_cache[index - 1];
+		}
+		self->sampler_cache[0] = res;
+		return res;
+	}
+
+	// we didn't find a matching sampler, so create new one
+	size_t sampler_ix = first_empty_ix;
+
+	// we didn't find an empty slot for the new sampler so we'll have to make one for it
+	if (sampler_ix == self->sampler_cache.count)
+	{
+		auto to_be_evicted = mn::buf_top(self->sampler_cache);
+		for (size_t i = 0; i + 1 < self->sampler_cache.count; ++i)
+		{
+			auto index = self->sampler_cache.count - i - 1;
+			self->sampler_cache[index] = self->sampler_cache[index - 1];
+		}
+		_renoir_gl450_sampler_free(api, to_be_evicted);
+		sampler_ix = 0;
+	}
+
+	// create the new sampler and put it at the head of the cache
+	auto sampler = _renoir_gl450_sampler_new(api, desc);
+	self->sampler_cache[sampler_ix] = sampler;
+	return sampler;
+}
+
 // API
 static bool
 _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 {
+	static_assert(RENOIR_CONSTANT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
+
 	auto ctx = renoir_gl450_context_new(&settings, display);
 	if (ctx == NULL)
 		return false;
@@ -1991,6 +2081,8 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 	self->command_pool = mn::pool_new(sizeof(Renoir_Command), 128);
 	self->settings = settings;
 	self->ctx = ctx;
+	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
+	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
 
 	renoir_gl450_context_bind(ctx);
 	glCreateVertexArrays(1, &self->vao);
@@ -2011,6 +2103,7 @@ _renoir_gl450_dispose(Renoir* api)
 	renoir_gl450_context_free(self->ctx);
 	mn::pool_free(self->handle_pool);
 	mn::pool_free(self->command_pool);
+	mn::buf_free(self->sampler_cache);
 	mn::free(self);
 }
 
@@ -2169,35 +2262,6 @@ _renoir_gl450_texture_free(Renoir* api, Renoir_Texture texture)
 	_renoir_gl450_command_process(self, command);
 }
 
-static Renoir_Sampler
-_renoir_gl450_sampler_new(Renoir* api, Renoir_Sampler_Desc desc)
-{
-	auto self = api->ctx;
-
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
-
-	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_SAMPLER);
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_NEW);
-	command->sampler_new.handle = h;
-	command->sampler_new.desc = desc;
-	_renoir_gl450_command_process(self, command);
-	return Renoir_Sampler{h};
-}
-
-static void
-_renoir_gl450_sampler_free(Renoir* api, Renoir_Sampler sampler)
-{
-	auto self = api->ctx;
-	auto h = (Renoir_Handle*)sampler.handle;
-
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_FREE);
-	command->sampler_free.handle = h;
-	_renoir_gl450_command_process(self, command);
-}
-
 static bool
 _renoir_gl450_program_check(Renoir* api,
 	RENOIR_SHADER stage,
@@ -2219,7 +2283,7 @@ _renoir_gl450_program_check(Renoir* api,
 	input.default_profile = GLSLANG_CORE_PROFILE;
 	input.messages = GLSLANG_MSG_DEFAULT_BIT;
 	input.resource = (glslang_resource_t*)&DefaultTBuiltInResource;
-	
+
 	if (glslang_initialize_process() == false)
 		return false;
 
@@ -2670,30 +2734,38 @@ _renoir_gl450_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	auto htex = (Renoir_Handle*)texture.handle;
+
 	mn::mutex_lock(self->mtx);
+	auto sampler = _renoir_gl450_sampler_get(api, htex->texture.default_sampler_desc);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
 	mn::mutex_unlock(self->mtx);
 
-	command->texture_bind.handle = (Renoir_Handle*)texture.handle;
+	command->texture_bind.handle = htex;
 	command->texture_bind.shader = shader;
 	command->texture_bind.slot = slot;
+	command->texture_bind.sampler = sampler;
 
 	_renoir_gl450_command_push(&h->pass, command);
 }
 
 static void
-_renoir_gl450_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Sampler sampler, RENOIR_SHADER shader, int slot)
+_renoir_gl450_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	auto htex = (Renoir_Handle*)texture.handle;
+
 	mn::mutex_lock(self->mtx);
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_BIND);
+	auto hsampler = _renoir_gl450_sampler_get(api, sampler);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
 	mn::mutex_unlock(self->mtx);
 
-	command->sampler_bind.handle = (Renoir_Handle*)sampler.handle;
-	command->sampler_bind.shader = shader;
-	command->sampler_bind.slot = slot;
+	command->texture_bind.handle = htex;
+	command->texture_bind.shader = shader;
+	command->texture_bind.slot = slot;
+	command->texture_bind.sampler = hsampler;
 
 	_renoir_gl450_command_push(&h->pass, command);
 }
@@ -2732,9 +2804,6 @@ _renoir_load_api(Renoir* api)
 	api->texture_new = _renoir_gl450_texture_new;
 	api->texture_free = _renoir_gl450_texture_free;
 
-	api->sampler_new = _renoir_gl450_sampler_new;
-	api->sampler_free = _renoir_gl450_sampler_free;
-
 	api->program_check = _renoir_gl450_program_check;
 	api->program_new = _renoir_gl450_program_new;
 	api->program_free = _renoir_gl450_program_free;
@@ -2761,7 +2830,7 @@ _renoir_load_api(Renoir* api)
 	api->texture_read = _renoir_gl450_texture_read;
 	api->buffer_bind = _renoir_gl450_buffer_bind;
 	api->texture_bind = _renoir_gl450_texture_bind;
-	api->sampler_bind = _renoir_gl450_sampler_bind;
+	api->texture_sampler_bind = _renoir_gl450_texture_sampler_bind;
 	api->draw = _renoir_gl450_draw;
 }
 
