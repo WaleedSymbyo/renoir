@@ -666,7 +666,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_NONE,
 	RENOIR_COMMAND_KIND_SWAPCHAIN_NEW,
 	RENOIR_COMMAND_KIND_SWAPCHAIN_FREE,
-	RENOIR_COMMAND_KIND_PASS_NEW,
+	RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW,
 	RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW,
 	RENOIR_COMMAND_KIND_PASS_FREE,
 	RENOIR_COMMAND_KIND_BUFFER_NEW,
@@ -994,7 +994,7 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_NONE:
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_NEW:
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_FREE:
-	case RENOIR_COMMAND_KIND_PASS_NEW:
+	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
 	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
 	case RENOIR_COMMAND_KIND_PASS_FREE:
 	case RENOIR_COMMAND_KIND_BUFFER_FREE:
@@ -1075,7 +1075,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		_renoir_gl450_handle_free(self, h);
 		break;
 	}
-	case RENOIR_COMMAND_KIND_PASS_NEW:
+	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
 	{
 		auto& h = command->pass_new.handle;
 		h->pass.swapchain = command->pass_new.swapchain;
@@ -2413,7 +2413,7 @@ _renoir_gl450_pipeline_free(Renoir* api, Renoir_Pipeline pipeline)
 }
 
 static Renoir_Pass
-_renoir_gl450_pass_new(Renoir* api, Renoir_Swapchain swapchain)
+_renoir_gl450_pass_swapchain_new(Renoir* api, Renoir_Swapchain swapchain)
 {
 	auto self = api->ctx;
 
@@ -2421,7 +2421,7 @@ _renoir_gl450_pass_new(Renoir* api, Renoir_Swapchain swapchain)
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PASS);
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_NEW);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW);
 	command->pass_new.handle = h;
 	command->pass_new.swapchain = (Renoir_Handle*)swapchain.handle;
 	_renoir_gl450_command_process(self, command);
@@ -2745,11 +2745,11 @@ _renoir_load_api(Renoir* api)
 	api->pipeline_new = _renoir_gl450_pipeline_new;
 	api->pipeline_free = _renoir_gl450_pipeline_free;
 
-	api->pass_new = _renoir_gl450_pass_new;
+	api->pass_swapchain_new = _renoir_gl450_pass_swapchain_new;
+	api->pass_offscreen_new = _renoir_gl450_pass_offscreen_new;
 	api->pass_free = _renoir_gl450_pass_free;
 
 	api->pass_begin = _renoir_gl450_pass_begin;
-	api->pass_offscreen_new = _renoir_gl450_pass_offscreen_new;
 	api->pass_end = _renoir_gl450_pass_end;
 	api->clear = _renoir_gl450_clear;
 	api->use_pipeline = _renoir_gl450_use_pipeline;
