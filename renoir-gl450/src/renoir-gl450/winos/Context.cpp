@@ -3,6 +3,7 @@
 #include "renoir/Renoir.h"
 
 #include <mn/Memory.h>
+#include <mn/Log.h>
 
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
@@ -68,6 +69,8 @@ _renoir_gl450_msaa_to_int(RENOIR_MSAA_MODE mode)
 Renoir_GL450_Context*
 renoir_gl450_context_new(Renoir_Settings* settings, void*)
 {
+	if (settings->external_context) return nullptr;
+
 	HGLRC fake_ctx = NULL;
 	HDC fake_dc = NULL;
 	HWND fake_wnd = NULL;
@@ -218,6 +221,10 @@ renoir_gl450_context_new(Renoir_Settings* settings, void*)
 	if (glew_result != GLEW_OK)
 		goto err;
 
+	mn::log_info("OpenGL Renderer: {}", glGetString(GL_RENDERER));
+	mn::log_info("OpenGL Version: {}", glGetString(GL_VERSION));
+	mn::log_info("GLSL Version: {}", glGetString(GL_SHADING_LANGUAGE_VERSION));
+
 	glEnable(GL_DEPTH_TEST);
 	glDepthRange(0.0, 1.0);
 	glEnable(GL_CULL_FACE);
@@ -250,6 +257,8 @@ err:
 void
 renoir_gl450_context_free(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	wglDeleteContext(self->context);
 	ReleaseDC(self->dummy_window, self->dummy_dc);
 	DestroyWindow(self->dummy_window);
@@ -259,6 +268,8 @@ renoir_gl450_context_free(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, Renoir_Settings* settings)
 {
+	if (self == nullptr) return;
+
 	auto hdc = GetDC((HWND)h->swapchain.handle);
 	h->swapchain.hdc = hdc;
 
@@ -309,36 +320,48 @@ renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, R
 void
 renoir_gl450_context_window_free(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
+	if (self == nullptr) return;
+
 	ReleaseDC((HWND)h->swapchain.handle, (HDC)h->swapchain.hdc);
 }
 
 void
 renoir_gl450_context_window_bind(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
+	if (self == nullptr) return;
+
 	wglMakeCurrent((HDC)h->swapchain.hdc, (HGLRC)self->context);
 }
 
 void
 renoir_gl450_context_bind(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	wglMakeCurrent((HDC)self->dummy_dc, (HGLRC)self->context);
 }
 
 void
 renoir_gl450_context_unbind(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	wglMakeCurrent(NULL, NULL);
 }
 
 void
 renoir_gl450_context_window_present(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
+	if (self == nullptr) return;
+
 	SwapBuffers((HDC)h->swapchain.hdc);
 }
 
 void
 renoir_gl450_context_reload(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	wglMakeCurrent((HDC)self->dummy_dc, (HGLRC)self->context);
 	GLenum glew_result = glewInit();
 	assert(glew_result == GLEW_OK && "glewInit failed");

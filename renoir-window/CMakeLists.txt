@@ -38,7 +38,7 @@ if (RENOIR_UNITY_BUILD)
 				   UNITY_BUILD true)
 endif()
 
-add_library(Renoir::renoir-window ALIAS renoir-window)
+add_library(MoustaphaSaad::renoir-window ALIAS renoir-window)
 
 target_link_libraries(renoir-window
 	PRIVATE

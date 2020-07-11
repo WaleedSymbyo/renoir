@@ -52,6 +52,8 @@ using glXSwapIntervalEXTProc = void (*)(Display* display, GLXDrawable drawable, 
 Renoir_GL450_Context*
 renoir_gl450_context_new(Renoir_Settings* settings, void* given_display)
 {
+	if (settings->external_context) return nullptr;
+
 	const int visual_attribs[] = {
 		GLX_X_RENDERABLE        , True,
 		GLX_DRAWABLE_TYPE       , GLX_WINDOW_BIT,
@@ -192,6 +194,8 @@ renoir_gl450_context_new(Renoir_Settings* settings, void* given_display)
 void
 renoir_gl450_context_free(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	if(self->dummy_window)
 		XDestroyWindow(self->display, self->dummy_window);
 	if (self->context)
@@ -204,6 +208,8 @@ renoir_gl450_context_free(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_window_init(Renoir_GL450_Context* self, Renoir_Handle* h, Renoir_Settings* settings)
 {
+	if (self == nullptr) return;
+
 	bool result = glXMakeCurrent(self->display, (GLXDrawable)h->swapchain.handle, self->context);
 	assert(result && "glXMakeCurrent");
 	(void) result;
@@ -235,6 +241,8 @@ renoir_gl450_context_window_free(Renoir_GL450_Context* self, Renoir_Handle* h)
 void
 renoir_gl450_context_window_bind(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
+	if (self == nullptr) return;
+
 	bool result = glXMakeCurrent(self->display, (GLXDrawable)h->swapchain.handle, self->context);
 	assert(result && "glXMakeCurrent");
 }
@@ -242,6 +250,8 @@ renoir_gl450_context_window_bind(Renoir_GL450_Context* self, Renoir_Handle* h)
 void
 renoir_gl450_context_bind(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	bool result = glXMakeCurrent(self->display, self->dummy_window, self->context);
 	assert(result && "glXMakeCurrent failed");
 }
@@ -249,6 +259,8 @@ renoir_gl450_context_bind(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_unbind(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	bool result = glXMakeCurrent(self->display, None, NULL);
 	assert(result && "glXMakeCurrent failed");
 }
@@ -256,12 +268,16 @@ renoir_gl450_context_unbind(Renoir_GL450_Context* self)
 void
 renoir_gl450_context_window_present(Renoir_GL450_Context* self, Renoir_Handle* h)
 {
+	if (self == nullptr) return;
+
 	glXSwapBuffers(self->display, (Window)h->swapchain.handle);
 }
 
 void
 renoir_gl450_context_reload(Renoir_GL450_Context* self)
 {
+	if (self == nullptr) return;
+
 	bool result = glXMakeCurrent(self->display, None, self->context);
 	assert(result && "glXMakeCurrent failed");
 	GLenum glew_result = glewInit();

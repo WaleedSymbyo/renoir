@@ -664,6 +664,7 @@ _renoir_primitive_to_gl(RENOIR_PRIMITIVE p)
 enum RENOIR_COMMAND_KIND
 {
 	RENOIR_COMMAND_KIND_NONE,
+	RENOIR_COMMAND_KIND_INIT,
 	RENOIR_COMMAND_KIND_SWAPCHAIN_NEW,
 	RENOIR_COMMAND_KIND_SWAPCHAIN_FREE,
 	RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW,
@@ -702,6 +703,9 @@ struct Renoir_Command
 	RENOIR_COMMAND_KIND kind;
 	union
 	{
+		struct
+		{
+		} init;
 		struct
 		{
 			Renoir_Handle* handle;
@@ -986,6 +990,7 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 		break;
 	}
 	case RENOIR_COMMAND_KIND_NONE:
+	case RENOIR_COMMAND_KIND_INIT:
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_NEW:
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_FREE:
 	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
@@ -1052,6 +1057,30 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 {
 	switch(command->kind)
 	{
+	case RENOIR_COMMAND_KIND_INIT:
+	{
+		renoir_gl450_context_bind(self->ctx);
+		if (self->settings.external_context)
+		{
+			// we just need to init glew in case of external context
+			GLenum glew_result = glewInit();
+			assert(glew_result == GLEW_OK && "glewInit failed");
+
+			mn::log_info("OpenGL Renderer: {}", glGetString(GL_RENDERER));
+			mn::log_info("OpenGL Version: {}", glGetString(GL_VERSION));
+			mn::log_info("GLSL Version: {}", glGetString(GL_SHADING_LANGUAGE_VERSION));
+
+			GLint major = 0, minor = 0;
+			glGetIntegerv(GL_MAJOR_VERSION, &major);
+			glGetIntegerv(GL_MINOR_VERSION, &minor);
+
+			mn::log_ensure(major >= 4 && minor >= 5, "incompatibile OpenGL Context");
+		}
+		glCreateVertexArrays(1, &self->vao);
+		glCreateFramebuffers(1, &self->msaa_resolve_fb);
+		assert(_renoir_gl450_check());
+		break;
+	}
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_NEW:
 	{
 		renoir_gl450_context_window_init(self->ctx, command->swapchain_new.handle, &self->settings);
@@ -1585,7 +1614,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				0, 0, h->pass.width, h->pass.height,
 				0, 0, h->pass.width, h->pass.height,
 				GL_COLOR_BUFFER_BIT,
-				GL_NEAREST
+				GL_LINEAR
 			);
 		}
 		assert(_renoir_gl450_check());
@@ -2072,7 +2101,7 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 	static_assert(RENOIR_CONSTANT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
 
 	auto ctx = renoir_gl450_context_new(&settings, display);
-	if (ctx == NULL)
+	if (ctx == nullptr && settings.external_context == false)
 		return false;
 
 	auto self = mn::alloc_zerod<IRenoir>();
@@ -2084,14 +2113,11 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
 	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
 
-	renoir_gl450_context_bind(ctx);
-	glCreateVertexArrays(1, &self->vao);
-	assert(_renoir_gl450_check());
-	glCreateFramebuffers(1, &self->msaa_resolve_fb);
-	assert(_renoir_gl450_check());
-	
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_INIT);
+	_renoir_gl450_command_process(self, command);
+
 	api->ctx = self;
-	
+
 	return true;
 }
 
@@ -2112,6 +2138,25 @@ _renoir_gl450_handle_ref(Renoir* api, void* handle)
 {
 	auto h = (Renoir_Handle*)handle;
 	h->rc.fetch_add(1);
+}
+
+static void
+_renoir_gl450_flush(Renoir* api)
+{
+	auto self = api->ctx;
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	// process commands
+	for(auto it = self->command_list_head; it != nullptr; it = it->next)
+	{
+		_renoir_gl450_command_execute(self, it);
+		_renoir_gl450_command_free(self, it);
+	}
+
+	self->command_list_head = nullptr;
+	self->command_list_tail = nullptr;
 }
 
 static Renoir_Swapchain
@@ -2173,6 +2218,9 @@ _renoir_gl450_swapchain_present(Renoir* api, Renoir_Swapchain swapchain)
 		_renoir_gl450_command_free(self, it);
 	}
 
+	self->command_list_head = nullptr;
+	self->command_list_tail = nullptr;
+
 	renoir_gl450_context_window_present(self->ctx, h);
 }
 
@@ -2198,9 +2246,12 @@ _renoir_gl450_buffer_new(Renoir* api, Renoir_Buffer_Desc desc)
 	command->buffer_new.desc = desc;
 	if (self->settings.defer_api_calls)
 	{
-		command->buffer_new.desc.data = mn::alloc(desc.data_size, alignof(char)).ptr;
-		::memcpy(command->buffer_new.desc.data, desc.data, desc.data_size);
-		command->buffer_new.owns_data = true;
+		if (desc.data)
+		{
+			command->buffer_new.desc.data = mn::alloc(desc.data_size, alignof(char)).ptr;
+			::memcpy(command->buffer_new.desc.data, desc.data, desc.data_size);
+			command->buffer_new.owns_data = true;
+		}
 	}
 	_renoir_gl450_command_process(self, command);
 	return Renoir_Buffer{h};
@@ -2241,9 +2292,12 @@ _renoir_gl450_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 	command->texture_new.desc = desc;
 	if (self->settings.defer_api_calls)
 	{
-		command->texture_new.desc.data = mn::alloc(desc.data_size, alignof(char)).ptr;
-		::memcpy(command->texture_new.desc.data, desc.data, desc.data_size);
-		command->texture_new.owns_data = true;
+		if (desc.data)
+		{
+			command->texture_new.desc.data = mn::alloc(desc.data_size, alignof(char)).ptr;
+			::memcpy(command->texture_new.desc.data, desc.data, desc.data_size);
+			command->texture_new.owns_data = true;
+		}
 	}
 	_renoir_gl450_command_process(self, command);
 	return Renoir_Texture{h};
@@ -2260,6 +2314,13 @@ _renoir_gl450_texture_free(Renoir* api, Renoir_Texture texture)
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 	command->texture_free.handle = h;
 	_renoir_gl450_command_process(self, command);
+}
+
+static void*
+_renoir_gl450_texture_native_handle(Renoir* api, Renoir_Texture texture)
+{
+	auto h = (Renoir_Handle*)texture.handle;
+	return (void*)h->texture.id;
 }
 
 static bool
@@ -2792,6 +2853,7 @@ _renoir_load_api(Renoir* api)
 	api->dispose = _renoir_gl450_dispose;
 
 	api->handle_ref = _renoir_gl450_handle_ref;
+	api->flush = _renoir_gl450_flush;
 
 	api->swapchain_new = _renoir_gl450_swapchain_new;
 	api->swapchain_free = _renoir_gl450_swapchain_free;
@@ -2803,6 +2865,7 @@ _renoir_load_api(Renoir* api)
 
 	api->texture_new = _renoir_gl450_texture_new;
 	api->texture_free = _renoir_gl450_texture_free;
+	api->texture_native_handle = _renoir_gl450_texture_native_handle;
 
 	api->program_check = _renoir_gl450_program_check;
 	api->program_new = _renoir_gl450_program_new;

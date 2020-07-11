@@ -43,7 +43,7 @@ if (RENOIR_UNITY_BUILD)
 				   UNITY_BUILD true)
 endif()
 
-add_library(Renoir::renoir-gl450 ALIAS renoir-gl450)
+add_library(MoustaphaSaad::renoir-gl450 ALIAS renoir-gl450)
 
 target_link_libraries(renoir-gl450
 	PUBLIC

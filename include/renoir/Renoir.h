@@ -190,6 +190,7 @@ typedef struct Renoir_Color {
 
 typedef struct Renoir_Settings {
 	bool defer_api_calls; // default: false
+	bool external_context; // default: false
 	RENOIR_MSAA_MODE msaa; // default: RENOIR_MSAA_MODE_NONE
 	RENOIR_VSYNC_MODE vsync; // default: RENOIR_VSYNC_MODE_ON
 } Renoir_Settings;
@@ -302,6 +303,7 @@ typedef struct Renoir
 	void (*dispose)(struct Renoir* self);
 
 	void (*handle_ref)(struct Renoir* self, void* handle);
+	void (*flush)(struct Renoir* self);
 
 	Renoir_Swapchain (*swapchain_new)(struct Renoir* api, int width, int height, void* window, void* display);
 	void (*swapchain_free)(struct Renoir* api, Renoir_Swapchain view);
@@ -313,6 +315,7 @@ typedef struct Renoir
 
 	Renoir_Texture (*texture_new)(struct Renoir* api, Renoir_Texture_Desc desc);
 	void (*texture_free)(struct Renoir* api, Renoir_Texture texture);
+	void* (*texture_native_handle)(struct Renoir* api, Renoir_Texture texture);
 
 	bool (*program_check)(struct Renoir* api, RENOIR_SHADER stage, const char* bytes, size_t bytes_size, char* error, size_t error_size);
 	Renoir_Program (*program_new)(struct Renoir* api, Renoir_Program_Desc desc);
