@@ -50,7 +50,7 @@ target_link_libraries(renoir-gl450
 		SPIRV
 		glslang
 	PRIVATE
-		glew
+		renoir-glew
 		mn
 		"$<$<PLATFORM_ID:Windows>:opengl32>"
 		"$<$<PLATFORM_ID:Linux>:X11;GL;GLU>"

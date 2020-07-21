@@ -17,7 +17,7 @@ set(SOURCE_FILES
 
 
 # add library target
-add_library(glew STATIC
+add_library(renoir-glew STATIC
 	${HEADER_FILES}
 	${SOURCE_FILES}
 )
@@ -26,19 +26,19 @@ add_library(glew STATIC
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${HEADER_FILES})
 source_group(TREE ${CMAKE_CURRENT_SOURCE_DIR} FILES ${SOURCE_FILES})
 
-target_compile_definitions(glew
+target_compile_definitions(renoir-glew
 	PUBLIC
 		GLEW_STATIC=1
 )
 
 # Windows specfic flags to enable W variations of winapi
 if(WIN32)
-	target_link_libraries(glew
+	target_link_libraries(renoir-glew
 		PUBLIC
 			opengl32
 	)
 elseif(UNIX)
-	target_link_libraries(glew
+	target_link_libraries(renoir-glew
 		PUBLIC
 			X11
 			GL
@@ -48,13 +48,13 @@ endif()
 
 
 # add d suffix in debug mode
-set_target_properties(glew PROPERTIES DEBUG_POSTFIX d)
+set_target_properties(renoir-glew PROPERTIES DEBUG_POSTFIX d)
 
 # define debug macro
-target_compile_definitions(glew PRIVATE "$<$<CONFIG:DEBUG>:DEBUG>")
+target_compile_definitions(renoir-glew PRIVATE "$<$<CONFIG:DEBUG>:DEBUG>")
 
 # list include directories
-target_include_directories(glew
+target_include_directories(renoir-glew
 	PUBLIC
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 )
