@@ -2706,6 +2706,10 @@ _renoir_gl450_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, in
 static void
 _renoir_gl450_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size)
 {
+	// this means he's trying to write nothing so no-op
+	if (bytes_size == 0)
+		return;
+
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
@@ -2725,6 +2729,10 @@ _renoir_gl450_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, 
 static void
 _renoir_gl450_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc)
 {
+	// this means he's trying to write nothing so no-op
+	if (desc.bytes_size == 0)
+		return;
+
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
@@ -2743,6 +2751,10 @@ _renoir_gl450_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture textur
 static void
 _renoir_gl450_buffer_read(Renoir* api, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size)
 {
+	// this means he's trying to read nothing so no-op
+	if (bytes_size == 0)
+		return;
+
 	auto self = api->ctx;
 
 	Renoir_Command command{};
@@ -2760,6 +2772,10 @@ _renoir_gl450_buffer_read(Renoir* api, Renoir_Buffer buffer, size_t offset, void
 static void
 _renoir_gl450_texture_read(Renoir* api, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc)
 {
+	// this means he's trying to read nothing so no-op
+	if (desc.bytes_size == 0)
+		return;
+
 	auto self = api->ctx;
 
 	Renoir_Command command{};
