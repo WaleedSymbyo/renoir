@@ -1782,7 +1782,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				command->texture_write.desc.bytes
 			);
 		}
-		else if (h->texture.size.height > 0 && h->texture.size.depth == 0)
+		else if (h->texture.size.height > 0 && h->texture.size.depth > 0)
 		{
 			// 3D texture
 			glTextureSubImage3D(
@@ -1857,7 +1857,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				command->texture_read.desc.bytes
 			);
 		}
-		else if (h->texture.size.height > 0 && h->texture.size.depth == 0)
+		else if (h->texture.size.height > 0 && h->texture.size.depth > 0)
 		{
 			// 3D texture
 			glGetTextureSubImage(
@@ -1908,7 +1908,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				// 2D texture
 				glBindTexture(GL_TEXTURE_2D, h->texture.id);
 			}
-			else if (h->texture.size.height > 0 && h->texture.size.depth == 0)
+			else if (h->texture.size.height > 0 && h->texture.size.depth > 0)
 			{
 				// 3D texture
 				glBindTexture(GL_TEXTURE_3D, h->texture.id);
