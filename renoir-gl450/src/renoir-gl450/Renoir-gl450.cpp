@@ -2323,6 +2323,13 @@ _renoir_gl450_texture_native_handle(Renoir* api, Renoir_Texture texture)
 	return (void*)h->texture.id;
 }
 
+static Renoir_Size
+_renoir_gl450_texture_size(Renoir* api, Renoir_Texture texture)
+{
+	auto h = (Renoir_Handle*)texture.handle;
+	return h->texture.size;
+}
+
 static bool
 _renoir_gl450_program_check(Renoir* api,
 	RENOIR_SHADER stage,
@@ -2882,6 +2889,7 @@ _renoir_load_api(Renoir* api)
 	api->texture_new = _renoir_gl450_texture_new;
 	api->texture_free = _renoir_gl450_texture_free;
 	api->texture_native_handle = _renoir_gl450_texture_native_handle;
+	api->texture_size = _renoir_gl450_texture_size;
 
 	api->program_check = _renoir_gl450_program_check;
 	api->program_new = _renoir_gl450_program_new;
