@@ -331,6 +331,7 @@ typedef struct Renoir
 	Renoir_Pass (*pass_swapchain_new)(struct Renoir* api, Renoir_Swapchain view);
 	Renoir_Pass (*pass_offscreen_new)(struct Renoir* api, Renoir_Pass_Offscreen_Desc desc);
 	void (*pass_free)(struct Renoir* api, Renoir_Pass pass);
+	Renoir_Size (*pass_size)(struct Renoir* api, Renoir_Pass pass);
 
 	// Graphics Commands
 	void (*pass_begin)(struct Renoir* api, Renoir_Pass pass);

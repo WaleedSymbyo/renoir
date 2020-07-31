@@ -2565,6 +2565,32 @@ _renoir_gl450_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 {
 	auto self = api->ctx;
 
+	// check that all sizes match
+	Renoir_Size size{-1, -1, -1};
+	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+	{
+		if (desc.color[i].handle == nullptr)
+			continue;
+
+		if (size.width == -1)
+		{
+			auto h = (Renoir_Handle*)desc.color[i].handle;
+			size = h->texture.size;
+		}
+		else
+		{
+			auto h = (Renoir_Handle*)desc.color[i].handle;
+			assert(size.width == h->texture.size.width &&
+				   size.height == h->texture.size.height);
+		}
+	}
+	if (desc.depth_stencil.handle && size.width != -1)
+	{
+		auto h = (Renoir_Handle*)desc.depth_stencil.handle;
+		assert(size.width == h->texture.size.width &&
+			   size.height == h->texture.size.height);
+	}
+
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
@@ -2588,6 +2614,30 @@ _renoir_gl450_pass_free(Renoir* api, Renoir_Pass pass)
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_FREE);
 	command->pass_free.handle = h;
 	_renoir_gl450_command_process(self, command);
+}
+
+static Renoir_Size
+_renoir_gl450_pass_size(Renoir* api, Renoir_Pass pass)
+{
+	Renoir_Size res{};
+	auto h = (Renoir_Handle*)pass.handle;
+	// if this is an on screen/window
+	if (auto swapchain = h->pass.swapchain)
+	{
+		res.width = swapchain->swapchain.width;
+		res.height = swapchain->swapchain.height;
+	}
+	// this is an off screen
+	else if (h->pass.fb != 0)
+	{
+		res.width = h->pass.width;
+		res.height = h->pass.height;
+	}
+	else
+	{
+		assert(false && "unreachable");
+	}
+	return res;
 }
 
 // Graphics Commands
@@ -2904,6 +2954,7 @@ _renoir_load_api(Renoir* api)
 	api->pass_swapchain_new = _renoir_gl450_pass_swapchain_new;
 	api->pass_offscreen_new = _renoir_gl450_pass_offscreen_new;
 	api->pass_free = _renoir_gl450_pass_free;
+	api->pass_size = _renoir_gl450_pass_size;
 
 	api->pass_begin = _renoir_gl450_pass_begin;
 	api->pass_end = _renoir_gl450_pass_end;
