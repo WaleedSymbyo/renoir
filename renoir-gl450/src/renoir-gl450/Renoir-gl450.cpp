@@ -2160,7 +2160,7 @@ _renoir_gl450_handle_ref(Renoir* api, void* handle)
 }
 
 static void
-_renoir_gl450_flush(Renoir* api)
+_renoir_gl450_flush(Renoir* api, void*, void*)
 {
 	auto self = api->ctx;
 

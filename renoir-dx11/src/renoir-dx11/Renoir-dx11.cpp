@@ -927,6 +927,38 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 	case RENOIR_COMMAND_KIND_INIT:
 	{
+		if (self->settings.external_context == false)
+		{
+			DXGI_ADAPTER_DESC dxgi_adapter_desc{};
+			auto res = self->adapter->GetDesc(&dxgi_adapter_desc);
+			assert(SUCCEEDED(res));
+
+			auto description = mn::from_os_encoding(mn::block_from(dxgi_adapter_desc.Description));
+			mn_defer(mn::str_free(description));
+			mn::log_info("D3D11 Renderer: {}", description);
+			mn::log_info("D3D11 Video Memory: {}Mb", dxgi_adapter_desc.DedicatedVideoMemory / 1024 / 1024);
+		}
+		else
+		{
+			IDXGIDevice* dxgi_device = nullptr;
+			auto res = self->device->QueryInterface(__uuidof(IDXGIDevice), (void**)&dxgi_device);
+			assert(SUCCEEDED(res));
+			mn_defer(dxgi_device->Release());
+
+			IDXGIAdapter* dxgi_adapter = nullptr;
+			res = dxgi_device->GetAdapter(&dxgi_adapter);
+			assert(SUCCEEDED(res));
+			mn_defer(dxgi_adapter->Release());
+
+			DXGI_ADAPTER_DESC dxgi_adapter_desc{};
+			res = dxgi_adapter->GetDesc(&dxgi_adapter_desc);
+			assert(SUCCEEDED(res));
+
+			auto description = mn::from_os_encoding(mn::block_from(dxgi_adapter_desc.Description));
+			mn_defer(mn::str_free(description));
+			mn::log_info("D3D11 Renderer: {}", description);
+			mn::log_info("D3D11 Video Memory: {}Mb", dxgi_adapter_desc.DedicatedVideoMemory / 1024 / 1024);
+		}
 		break;
 	}
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_NEW:
@@ -1037,7 +1069,11 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 			else
 			{
-				auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, nullptr, &h->pass.depth_stencil_view);
+				auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+				D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
+				depth_view_desc.Format = dx_format;
+				depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+				auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->pass.depth_stencil_view);
 				assert(SUCCEEDED(res));
 			}
 
@@ -2352,10 +2388,13 @@ _renoir_dx11_dispose(Renoir* api)
 {
 	auto self = api->ctx;
 	mn::mutex_free(self->mtx);
-	self->factory->Release();
-	self->adapter->Release();
-	self->device->Release();
-	self->context->Release();
+	if (self->settings.external_context == false)
+	{
+		self->factory->Release();
+		self->adapter->Release();
+		self->device->Release();
+		self->context->Release();
+	}
 	mn::pool_free(self->handle_pool);
 	mn::pool_free(self->command_pool);
 	mn::buf_free(self->sampler_cache);
@@ -2382,12 +2421,19 @@ _renoir_dx11_handle_ref(Renoir* api, void* handle)
 }
 
 static void
-_renoir_dx11_flush(Renoir* api)
+_renoir_dx11_flush(Renoir* api, void* device, void* context)
 {
 	auto self = api->ctx;
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
+
+	self->device = (ID3D11Device*)device;
+	self->context = (ID3D11DeviceContext*)context;
+	mn_defer({
+		self->device = nullptr;
+		self->context = nullptr;
+	});
 
 	// process commands
 	for(auto it = self->command_list_head; it != nullptr; it = it->next)

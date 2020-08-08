@@ -311,7 +311,7 @@ typedef struct Renoir
 	RENOIR_TEXTURE_ORIGIN (*texture_origin)();
 
 	void (*handle_ref)(struct Renoir* self, void* handle);
-	void (*flush)(struct Renoir* self);
+	void (*flush)(struct Renoir* self, void* device, void* context);
 
 	Renoir_Swapchain (*swapchain_new)(struct Renoir* api, int width, int height, void* window, void* display);
 	void (*swapchain_free)(struct Renoir* api, Renoir_Swapchain view);
