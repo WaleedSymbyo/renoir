@@ -15,110 +15,110 @@
 #include <glslang/Include/ResourceLimits.h>
 
 const TBuiltInResource DefaultTBuiltInResource = {
-    /* .MaxLights = */ 32,
-    /* .MaxClipPlanes = */ 6,
-    /* .MaxTextureUnits = */ 32,
-    /* .MaxTextureCoords = */ 32,
-    /* .MaxVertexAttribs = */ 64,
-    /* .MaxVertexUniformComponents = */ 4096,
-    /* .MaxVaryingFloats = */ 64,
-    /* .MaxVertexTextureImageUnits = */ 32,
-    /* .MaxCombinedTextureImageUnits = */ 80,
-    /* .MaxTextureImageUnits = */ 32,
-    /* .MaxFragmentUniformComponents = */ 4096,
-    /* .MaxDrawBuffers = */ 32,
-    /* .MaxVertexUniformVectors = */ 128,
-    /* .MaxVaryingVectors = */ 8,
-    /* .MaxFragmentUniformVectors = */ 16,
-    /* .MaxVertexOutputVectors = */ 16,
-    /* .MaxFragmentInputVectors = */ 15,
-    /* .MinProgramTexelOffset = */ -8,
-    /* .MaxProgramTexelOffset = */ 7,
-    /* .MaxClipDistances = */ 8,
-    /* .MaxComputeWorkGroupCountX = */ 65535,
-    /* .MaxComputeWorkGroupCountY = */ 65535,
-    /* .MaxComputeWorkGroupCountZ = */ 65535,
-    /* .MaxComputeWorkGroupSizeX = */ 1024,
-    /* .MaxComputeWorkGroupSizeY = */ 1024,
-    /* .MaxComputeWorkGroupSizeZ = */ 64,
-    /* .MaxComputeUniformComponents = */ 1024,
-    /* .MaxComputeTextureImageUnits = */ 16,
-    /* .MaxComputeImageUniforms = */ 8,
-    /* .MaxComputeAtomicCounters = */ 8,
-    /* .MaxComputeAtomicCounterBuffers = */ 1,
-    /* .MaxVaryingComponents = */ 60,
-    /* .MaxVertexOutputComponents = */ 64,
-    /* .MaxGeometryInputComponents = */ 64,
-    /* .MaxGeometryOutputComponents = */ 128,
-    /* .MaxFragmentInputComponents = */ 128,
-    /* .MaxImageUnits = */ 8,
-    /* .MaxCombinedImageUnitsAndFragmentOutputs = */ 8,
-    /* .MaxCombinedShaderOutputResources = */ 8,
-    /* .MaxImageSamples = */ 0,
-    /* .MaxVertexImageUniforms = */ 0,
-    /* .MaxTessControlImageUniforms = */ 0,
-    /* .MaxTessEvaluationImageUniforms = */ 0,
-    /* .MaxGeometryImageUniforms = */ 0,
-    /* .MaxFragmentImageUniforms = */ 8,
-    /* .MaxCombinedImageUniforms = */ 8,
-    /* .MaxGeometryTextureImageUnits = */ 16,
-    /* .MaxGeometryOutputVertices = */ 256,
-    /* .MaxGeometryTotalOutputComponents = */ 1024,
-    /* .MaxGeometryUniformComponents = */ 1024,
-    /* .MaxGeometryVaryingComponents = */ 64,
-    /* .MaxTessControlInputComponents = */ 128,
-    /* .MaxTessControlOutputComponents = */ 128,
-    /* .MaxTessControlTextureImageUnits = */ 16,
-    /* .MaxTessControlUniformComponents = */ 1024,
-    /* .MaxTessControlTotalOutputComponents = */ 4096,
-    /* .MaxTessEvaluationInputComponents = */ 128,
-    /* .MaxTessEvaluationOutputComponents = */ 128,
-    /* .MaxTessEvaluationTextureImageUnits = */ 16,
-    /* .MaxTessEvaluationUniformComponents = */ 1024,
-    /* .MaxTessPatchComponents = */ 120,
-    /* .MaxPatchVertices = */ 32,
-    /* .MaxTessGenLevel = */ 64,
-    /* .MaxViewports = */ 16,
-    /* .MaxVertexAtomicCounters = */ 0,
-    /* .MaxTessControlAtomicCounters = */ 0,
-    /* .MaxTessEvaluationAtomicCounters = */ 0,
-    /* .MaxGeometryAtomicCounters = */ 0,
-    /* .MaxFragmentAtomicCounters = */ 8,
-    /* .MaxCombinedAtomicCounters = */ 8,
-    /* .MaxAtomicCounterBindings = */ 1,
-    /* .MaxVertexAtomicCounterBuffers = */ 0,
-    /* .MaxTessControlAtomicCounterBuffers = */ 0,
-    /* .MaxTessEvaluationAtomicCounterBuffers = */ 0,
-    /* .MaxGeometryAtomicCounterBuffers = */ 0,
-    /* .MaxFragmentAtomicCounterBuffers = */ 1,
-    /* .MaxCombinedAtomicCounterBuffers = */ 1,
-    /* .MaxAtomicCounterBufferSize = */ 16384,
-    /* .MaxTransformFeedbackBuffers = */ 4,
-    /* .MaxTransformFeedbackInterleavedComponents = */ 64,
-    /* .MaxCullDistances = */ 8,
-    /* .MaxCombinedClipAndCullDistances = */ 8,
-    /* .MaxSamples = */ 4,
-    /* .maxMeshOutputVerticesNV = */ 256,
-    /* .maxMeshOutputPrimitivesNV = */ 512,
-    /* .maxMeshWorkGroupSizeX_NV = */ 32,
-    /* .maxMeshWorkGroupSizeY_NV = */ 1,
-    /* .maxMeshWorkGroupSizeZ_NV = */ 1,
-    /* .maxTaskWorkGroupSizeX_NV = */ 32,
-    /* .maxTaskWorkGroupSizeY_NV = */ 1,
-    /* .maxTaskWorkGroupSizeZ_NV = */ 1,
-    /* .maxMeshViewCountNV = */ 4,
+	/* .MaxLights = */ 32,
+	/* .MaxClipPlanes = */ 6,
+	/* .MaxTextureUnits = */ 32,
+	/* .MaxTextureCoords = */ 32,
+	/* .MaxVertexAttribs = */ 64,
+	/* .MaxVertexUniformComponents = */ 4096,
+	/* .MaxVaryingFloats = */ 64,
+	/* .MaxVertexTextureImageUnits = */ 32,
+	/* .MaxCombinedTextureImageUnits = */ 80,
+	/* .MaxTextureImageUnits = */ 32,
+	/* .MaxFragmentUniformComponents = */ 4096,
+	/* .MaxDrawBuffers = */ 32,
+	/* .MaxVertexUniformVectors = */ 128,
+	/* .MaxVaryingVectors = */ 8,
+	/* .MaxFragmentUniformVectors = */ 16,
+	/* .MaxVertexOutputVectors = */ 16,
+	/* .MaxFragmentInputVectors = */ 15,
+	/* .MinProgramTexelOffset = */ -8,
+	/* .MaxProgramTexelOffset = */ 7,
+	/* .MaxClipDistances = */ 8,
+	/* .MaxComputeWorkGroupCountX = */ 65535,
+	/* .MaxComputeWorkGroupCountY = */ 65535,
+	/* .MaxComputeWorkGroupCountZ = */ 65535,
+	/* .MaxComputeWorkGroupSizeX = */ 1024,
+	/* .MaxComputeWorkGroupSizeY = */ 1024,
+	/* .MaxComputeWorkGroupSizeZ = */ 64,
+	/* .MaxComputeUniformComponents = */ 1024,
+	/* .MaxComputeTextureImageUnits = */ 16,
+	/* .MaxComputeImageUniforms = */ 8,
+	/* .MaxComputeAtomicCounters = */ 8,
+	/* .MaxComputeAtomicCounterBuffers = */ 1,
+	/* .MaxVaryingComponents = */ 60,
+	/* .MaxVertexOutputComponents = */ 64,
+	/* .MaxGeometryInputComponents = */ 64,
+	/* .MaxGeometryOutputComponents = */ 128,
+	/* .MaxFragmentInputComponents = */ 128,
+	/* .MaxImageUnits = */ 8,
+	/* .MaxCombinedImageUnitsAndFragmentOutputs = */ 8,
+	/* .MaxCombinedShaderOutputResources = */ 8,
+	/* .MaxImageSamples = */ 0,
+	/* .MaxVertexImageUniforms = */ 0,
+	/* .MaxTessControlImageUniforms = */ 0,
+	/* .MaxTessEvaluationImageUniforms = */ 0,
+	/* .MaxGeometryImageUniforms = */ 0,
+	/* .MaxFragmentImageUniforms = */ 8,
+	/* .MaxCombinedImageUniforms = */ 8,
+	/* .MaxGeometryTextureImageUnits = */ 16,
+	/* .MaxGeometryOutputVertices = */ 256,
+	/* .MaxGeometryTotalOutputComponents = */ 1024,
+	/* .MaxGeometryUniformComponents = */ 1024,
+	/* .MaxGeometryVaryingComponents = */ 64,
+	/* .MaxTessControlInputComponents = */ 128,
+	/* .MaxTessControlOutputComponents = */ 128,
+	/* .MaxTessControlTextureImageUnits = */ 16,
+	/* .MaxTessControlUniformComponents = */ 1024,
+	/* .MaxTessControlTotalOutputComponents = */ 4096,
+	/* .MaxTessEvaluationInputComponents = */ 128,
+	/* .MaxTessEvaluationOutputComponents = */ 128,
+	/* .MaxTessEvaluationTextureImageUnits = */ 16,
+	/* .MaxTessEvaluationUniformComponents = */ 1024,
+	/* .MaxTessPatchComponents = */ 120,
+	/* .MaxPatchVertices = */ 32,
+	/* .MaxTessGenLevel = */ 64,
+	/* .MaxViewports = */ 16,
+	/* .MaxVertexAtomicCounters = */ 0,
+	/* .MaxTessControlAtomicCounters = */ 0,
+	/* .MaxTessEvaluationAtomicCounters = */ 0,
+	/* .MaxGeometryAtomicCounters = */ 0,
+	/* .MaxFragmentAtomicCounters = */ 8,
+	/* .MaxCombinedAtomicCounters = */ 8,
+	/* .MaxAtomicCounterBindings = */ 1,
+	/* .MaxVertexAtomicCounterBuffers = */ 0,
+	/* .MaxTessControlAtomicCounterBuffers = */ 0,
+	/* .MaxTessEvaluationAtomicCounterBuffers = */ 0,
+	/* .MaxGeometryAtomicCounterBuffers = */ 0,
+	/* .MaxFragmentAtomicCounterBuffers = */ 1,
+	/* .MaxCombinedAtomicCounterBuffers = */ 1,
+	/* .MaxAtomicCounterBufferSize = */ 16384,
+	/* .MaxTransformFeedbackBuffers = */ 4,
+	/* .MaxTransformFeedbackInterleavedComponents = */ 64,
+	/* .MaxCullDistances = */ 8,
+	/* .MaxCombinedClipAndCullDistances = */ 8,
+	/* .MaxSamples = */ 4,
+	/* .maxMeshOutputVerticesNV = */ 256,
+	/* .maxMeshOutputPrimitivesNV = */ 512,
+	/* .maxMeshWorkGroupSizeX_NV = */ 32,
+	/* .maxMeshWorkGroupSizeY_NV = */ 1,
+	/* .maxMeshWorkGroupSizeZ_NV = */ 1,
+	/* .maxTaskWorkGroupSizeX_NV = */ 32,
+	/* .maxTaskWorkGroupSizeY_NV = */ 1,
+	/* .maxTaskWorkGroupSizeZ_NV = */ 1,
+	/* .maxMeshViewCountNV = */ 4,
 
-    /* .limits = */ {
-        /* .nonInductiveForLoops = */ 1,
-        /* .whileLoops = */ 1,
-        /* .doWhileLoops = */ 1,
-        /* .generalUniformIndexing = */ 1,
-        /* .generalAttributeMatrixVectorIndexing = */ 1,
-        /* .generalVaryingIndexing = */ 1,
-        /* .generalSamplerIndexing = */ 1,
-        /* .generalVariableIndexing = */ 1,
-        /* .generalConstantMatrixVectorIndexing = */ 1,
-    }
+	/* .limits = */ {
+		/* .nonInductiveForLoops = */ 1,
+		/* .whileLoops = */ 1,
+		/* .doWhileLoops = */ 1,
+		/* .generalUniformIndexing = */ 1,
+		/* .generalAttributeMatrixVectorIndexing = */ 1,
+		/* .generalVaryingIndexing = */ 1,
+		/* .generalSamplerIndexing = */ 1,
+		/* .generalVariableIndexing = */ 1,
+		/* .generalConstantMatrixVectorIndexing = */ 1,
+	}
 };
 
 inline static bool
@@ -706,6 +706,7 @@ struct Renoir_Command
 		struct
 		{
 		} init;
+
 		struct
 		{
 			Renoir_Handle* handle;
@@ -890,11 +891,16 @@ struct IRenoir
 	mn::Pool handle_pool;
 	mn::Pool command_pool;
 	Renoir_Settings settings;
+
+	// global command list
 	Renoir_Command *command_list_head;
 	Renoir_Command *command_list_tail;
 
+	// command execution context
 	Renoir_Handle* current_pipeline;
 	Renoir_Handle* current_program;
+
+	// caches
 	GLuint vao;
 	GLuint msaa_resolve_fb;
 	mn::Buf<Renoir_Handle*> sampler_cache;
@@ -1089,7 +1095,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_FREE:
 	{
-		auto& h = command->swapchain_free.handle;
+		auto h = command->swapchain_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		renoir_gl450_context_window_free(self->ctx, h);
@@ -1099,13 +1105,13 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
 	{
-		auto& h = command->pass_new.handle;
+		auto h = command->pass_new.handle;
 		h->pass.swapchain = command->pass_new.swapchain;
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
 	{
-		auto& h = command->pass_offscreen_new.handle;
+		auto h = command->pass_offscreen_new.handle;
 		auto& desc = command->pass_offscreen_new.desc;
 		h->pass.offscreen = desc;
 
@@ -1119,6 +1125,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			auto color = (Renoir_Handle*)desc.color[i].handle;
 			if (color == nullptr)
 				continue;
+			assert(color->texture.render_target);
 
 			_renoir_gl450_handle_ref(color);
 			if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
@@ -1156,6 +1163,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto depth = (Renoir_Handle*)desc.depth_stencil.handle;
 		if (depth)
 		{
+			assert(depth->texture.render_target);
 			_renoir_gl450_handle_ref(depth);
 			if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
 			{
@@ -1195,7 +1203,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PASS_FREE:
 	{
-		auto& h = command->pass_free.handle;
+		auto h = command->pass_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		
@@ -1205,7 +1213,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		// free all the bound textures if it's a framebuffer pass
 		if (h->pass.fb != 0)
 		{
-			for (size_t i = 0; i < 4; ++i)
+			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 			{
 				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
 				if (color == nullptr)
@@ -1235,7 +1243,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_NEW:
 	{
-		auto& h = command->buffer_new.handle;
+		auto h = command->buffer_new.handle;
 		auto& desc = command->buffer_new.desc;
 
 		h->buffer.access = desc.access;
@@ -1252,7 +1260,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_FREE:
 	{
-		auto& h = command->buffer_free.handle;
+		auto h = command->buffer_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		glDeleteBuffers(1, &h->buffer.id);
@@ -1262,7 +1270,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_NEW:
 	{
-		auto& h = command->texture_new.handle;
+		auto h = command->texture_new.handle;
 		auto& desc = command->texture_new.desc;
 
 		h->texture.access = desc.access;
@@ -1357,7 +1365,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_FREE:
 	{
-		auto& h = command->texture_free.handle;
+		auto h = command->texture_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		glDeleteTextures(1, &h->texture.id);
@@ -1371,7 +1379,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_SAMPLER_NEW:
 	{
-		auto& h = command->sampler_new.handle;
+		auto h = command->sampler_new.handle;
 		auto& desc = command->sampler_new.desc;
 		h->sampler.desc = desc;
 
@@ -1401,7 +1409,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_SAMPLER_FREE:
 	{
-		auto& h = command->sampler_free.handle;
+		auto h = command->sampler_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		glDeleteSamplers(1, &h->sampler.id);
@@ -1412,7 +1420,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PROGRAM_NEW:
 	{
 		auto& desc = command->program_new.desc;
-		auto& h = command->program_new.handle;
+		auto h = command->program_new.handle;
 		constexpr size_t error_length = 1024;
 		char error[error_length];
 		GLint size = 0;
@@ -1492,7 +1500,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PROGRAM_FREE:
 	{
-		auto& h = command->program_free.handle;
+		auto h = command->program_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		glDeleteProgram(h->program.id);
@@ -1503,7 +1511,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_COMPUTE_NEW:
 	{
 		auto& desc = command->compute_new.desc;
-		auto& h = command->compute_new.handle;
+		auto h = command->compute_new.handle;
 		constexpr size_t error_length = 1024;
 		char error[error_length];
 		GLint size = 0;
@@ -1542,7 +1550,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_COMPUTE_FREE:
 	{
-		auto& h = command->compute_free.handle;
+		auto h = command->compute_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		glDeleteProgram(h->compute.id);
@@ -1558,7 +1566,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
 	{
-		auto& h = command->pipeline_free.handle;
+		auto h = command->pipeline_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		_renoir_gl450_handle_free(self, h);
@@ -1567,7 +1575,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	{
-		auto& h = command->pass_begin.handle;
+		auto h = command->pass_begin.handle;
 		// if this is an on screen/window
 		if (auto swapchain = h->pass.swapchain)
 		{
@@ -1592,7 +1600,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PASS_END:
 	{
-		auto& h = command->pass_end.handle;
+		auto h = command->pass_end.handle;
 		// if this is an off screen view with msaa we'll need to issue a read command to move the data
 		// from renderbuffer to the texture
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
@@ -1725,7 +1733,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_USE_PROGRAM:
 	{
-		auto& h = command->use_program.program;
+		auto h = command->use_program.program;
 		self->current_program = h;
 		glUseProgram(self->current_program->program.id);
 		break;
@@ -1737,7 +1745,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_WRITE:
 	{
-		auto& h = command->buffer_write.handle;
+		auto h = command->buffer_write.handle;
 		void* ptr = glMapNamedBufferRange(
 			h->buffer.id,
 			command->buffer_write.offset,
@@ -1751,7 +1759,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_WRITE:
 	{
-		auto& h = command->texture_write.handle;
+		auto h = command->texture_write.handle;
 		auto gl_format = _renoir_pixelformat_to_gl(h->texture.pixel_format);
 		auto gl_type = _renoir_pixelformat_to_type_gl(h->texture.pixel_format);
 		if (h->texture.size.height == 0 && h->texture.size.depth == 0)
@@ -1804,7 +1812,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_READ:
 	{
-		auto& h = command->buffer_read.handle;
+		auto h = command->buffer_read.handle;
 		void* ptr = glMapNamedBufferRange(
 			h->buffer.id,
 			command->buffer_read.offset,
@@ -1818,7 +1826,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
 	{
-		auto& h = command->texture_read.handle;
+		auto h = command->texture_read.handle;
 		auto gl_format = _renoir_pixelformat_to_gl(h->texture.pixel_format);
 		auto gl_type = _renoir_pixelformat_to_type_gl(h->texture.pixel_format);
 		if (h->texture.size.height == 0 && h->texture.size.depth == 0)
@@ -1880,7 +1888,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
 	{
-		auto& h = command->buffer_bind.handle;
+		auto h = command->buffer_bind.handle;
 		assert(h->buffer.type == RENOIR_BUFFER_UNIFORM || h->buffer.type == RENOIR_BUFFER_COMPUTE);
 		auto gl_type = _renoir_buffer_type_to_gl(h->buffer.type);
 		glBindBufferBase(gl_type, command->buffer_bind.slot, h->buffer.id);
@@ -1889,7 +1897,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
 	{
-		auto& h = command->texture_bind.handle;
+		auto h = command->texture_bind.handle;
 		glActiveTexture(GL_TEXTURE0 + command->texture_bind.slot);
 		if (command->texture_bind.shader == RENOIR_SHADER_COMPUTE)
 		{
@@ -1929,6 +1937,10 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			auto& vertex = desc.vertex_buffers[i];
 			if (vertex.buffer.handle == nullptr)
 				continue;
+
+			// calculate the default stride for the vertex buffer
+			if (vertex.stride == 0)
+				vertex.stride = _renoir_type_to_size(vertex.type);
 
 			auto h = (Renoir_Handle*)vertex.buffer.handle;
 
@@ -1997,10 +2009,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 }
 
 inline static Renoir_Handle*
-_renoir_gl450_sampler_new(Renoir* api, Renoir_Sampler_Desc desc)
+_renoir_gl450_sampler_new(IRenoir* self, Renoir_Sampler_Desc desc)
 {
-	auto self = api->ctx;
-
 	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_SAMPLER);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_NEW);
 	command->sampler_new.handle = h;
@@ -2010,10 +2020,8 @@ _renoir_gl450_sampler_new(Renoir* api, Renoir_Sampler_Desc desc)
 }
 
 inline static void
-_renoir_gl450_sampler_free(Renoir* api, Renoir_Handle* h)
+_renoir_gl450_sampler_free(IRenoir* self, Renoir_Handle* h)
 {
-	auto self = api->ctx;
-
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_FREE);
 	command->sampler_free.handle = h;
 	_renoir_gl450_command_process(self, command);
@@ -2036,9 +2044,8 @@ operator==(const Renoir_Sampler_Desc& a, const Renoir_Sampler_Desc& b)
 }
 
 inline static Renoir_Handle*
-_renoir_gl450_sampler_get(Renoir* api, Renoir_Sampler_Desc desc)
+_renoir_gl450_sampler_get(IRenoir* self, Renoir_Sampler_Desc desc)
 {
-	auto self = (IRenoir*)api->ctx;
 	size_t best_ix = self->sampler_cache.count;
 	size_t first_empty_ix = self->sampler_cache.count;
 	for (size_t i = 0; i < self->sampler_cache.count; ++i)
@@ -2084,12 +2091,12 @@ _renoir_gl450_sampler_get(Renoir* api, Renoir_Sampler_Desc desc)
 			auto index = self->sampler_cache.count - i - 1;
 			self->sampler_cache[index] = self->sampler_cache[index - 1];
 		}
-		_renoir_gl450_sampler_free(api, to_be_evicted);
+		_renoir_gl450_sampler_free(self, to_be_evicted);
 		sampler_ix = 0;
 	}
 
 	// create the new sampler and put it at the head of the cache
-	auto sampler = _renoir_gl450_sampler_new(api, desc);
+	auto sampler = _renoir_gl450_sampler_new(self, desc);
 	self->sampler_cache[sampler_ix] = sampler;
 	return sampler;
 }
@@ -2131,6 +2138,18 @@ _renoir_gl450_dispose(Renoir* api)
 	mn::pool_free(self->command_pool);
 	mn::buf_free(self->sampler_cache);
 	mn::free(self);
+}
+
+static const char*
+_renoir_gl450_name()
+{
+	return "gl450";
+}
+
+static RENOIR_TEXTURE_ORIGIN
+_renoir_gl450_texture_origin()
+{
+	return RENOIR_TEXTURE_ORIGIN_BOTTOM_LEFT;
 }
 
 static void
@@ -2235,6 +2254,16 @@ _renoir_gl450_buffer_new(Renoir* api, Renoir_Buffer_Desc desc)
 		assert(false && "a dynamic buffer with cpu access set to none is a static buffer");
 	}
 
+	if (desc.usage == RENOIR_USAGE_STATIC && desc.data == nullptr)
+	{
+		assert(false && "a static buffer should have data to initialize it");
+	}
+
+	if (desc.type == RENOIR_BUFFER_UNIFORM && desc.data_size % 16 != 0)
+	{
+		assert(false && "uniform buffers should be aligned to 16 bytes");
+	}
+
 	auto self = api->ctx;
 
 	mn::mutex_lock(self->mtx);
@@ -2278,7 +2307,12 @@ _renoir_gl450_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 
 	if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access == RENOIR_ACCESS_NONE)
 	{
-		assert(false && "a dynamic buffer with cpu access set to none is a static buffer");
+		assert(false && "a dynamic texture with cpu access set to none is a static texture");
+	}
+
+	if (desc.render_target == false && desc.usage == RENOIR_USAGE_STATIC && desc.data == nullptr)
+	{
+		assert(false && "a static texture should have data to initialize it");
 	}
 
 	auto self = api->ctx;
@@ -2770,6 +2804,8 @@ _renoir_gl450_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, 
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->buffer.usage != RENOIR_USAGE_STATIC);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_BUFFER_WRITE);
 	mn::mutex_unlock(self->mtx);
@@ -2792,6 +2828,8 @@ _renoir_gl450_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture textur
 
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->texture.usage != RENOIR_USAGE_STATIC);
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_WRITE);
@@ -2871,7 +2909,7 @@ _renoir_gl450_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 	auto htex = (Renoir_Handle*)texture.handle;
 
 	mn::mutex_lock(self->mtx);
-	auto sampler = _renoir_gl450_sampler_get(api, htex->texture.default_sampler_desc);
+	auto sampler = _renoir_gl450_sampler_get(self, htex->texture.default_sampler_desc);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
 	mn::mutex_unlock(self->mtx);
 
@@ -2892,7 +2930,7 @@ _renoir_gl450_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture
 	auto htex = (Renoir_Handle*)texture.handle;
 
 	mn::mutex_lock(self->mtx);
-	auto hsampler = _renoir_gl450_sampler_get(api, sampler);
+	auto hsampler = _renoir_gl450_sampler_get(self, sampler);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
 	mn::mutex_unlock(self->mtx);
 
@@ -2924,6 +2962,9 @@ _renoir_load_api(Renoir* api)
 {
 	api->init = _renoir_gl450_init;
 	api->dispose = _renoir_gl450_dispose;
+
+	api->name = _renoir_gl450_name;
+	api->texture_origin = _renoir_gl450_texture_origin;
 
 	api->handle_ref = _renoir_gl450_handle_ref;
 	api->flush = _renoir_gl450_flush;

@@ -30,6 +30,11 @@ add_library(MoustaphaSaad::renoir ALIAS renoir)
 target_include_directories(renoir INTERFACE ${CMAKE_CURRENT_SOURCE_DIR}/include)
 add_dependencies(renoir renoir-gl450)
 
+if (WIN32)
+	add_subdirectory(renoir-dx11)
+	add_dependencies(renoir renoir-dx11)
+endif (WIN32)
+
 if (RENOIR_BUILD_EXAMPLES)
 	add_subdirectory(examples)
 endif()

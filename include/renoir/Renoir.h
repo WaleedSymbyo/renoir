@@ -165,6 +165,11 @@ typedef enum RENOIR_VSYNC_MODE {
 	RENOIR_VSYNC_MODE_OFF
 } RENOIR_VSYNC_MODE;
 
+typedef enum RENOIR_TEXTURE_ORIGIN {
+	RENOIR_TEXTURE_ORIGIN_TOP_LEFT,
+	RENOIR_TEXTURE_ORIGIN_BOTTOM_LEFT
+} RENOIR_TEXTURE_ORIGIN;
+
 // Handles
 typedef struct Renoir_Buffer { void* handle; } Renoir_Buffer;
 typedef struct Renoir_Pipeline { void* handle; } Renoir_Pipeline;
@@ -301,6 +306,9 @@ typedef struct Renoir
 
 	bool (*init)(struct Renoir* self, Renoir_Settings settings, void* display);
 	void (*dispose)(struct Renoir* self);
+
+	const char* (*name)();
+	RENOIR_TEXTURE_ORIGIN (*texture_origin)();
 
 	void (*handle_ref)(struct Renoir* self, void* handle);
 	void (*flush)(struct Renoir* self);
