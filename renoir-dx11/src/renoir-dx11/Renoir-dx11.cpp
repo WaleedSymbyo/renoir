@@ -1026,21 +1026,49 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
-			auto color = (Renoir_Handle*)desc.color[i].handle;
+			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 			assert(color->texture.render_target);
 
 			_renoir_dx11_handle_ref(color);
-			if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			if (color->texture.cube_map == false)
 			{
-				auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, nullptr, &h->pass.render_target_view[i]);
-				assert(SUCCEEDED(res));
+				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, nullptr, &h->pass.render_target_view[i]);
+					assert(SUCCEEDED(res));
+				}
+				else
+				{
+					auto res = self->device->CreateRenderTargetView(color->texture.texture2d, nullptr, &h->pass.render_target_view[i]);
+					assert(SUCCEEDED(res));
+				}
 			}
 			else
 			{
-				auto res = self->device->CreateRenderTargetView(color->texture.texture2d, nullptr, &h->pass.render_target_view[i]);
-				assert(SUCCEEDED(res));
+				auto dx_format = _renoir_pixelformat_to_dx(color->texture.pixel_format);
+
+				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					D3D11_RENDER_TARGET_VIEW_DESC render_target_desc{};
+					render_target_desc.Format = dx_format;
+					render_target_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
+					render_target_desc.Texture2DMSArray.FirstArraySlice = desc.color[i].subresource;
+					render_target_desc.Texture2DMSArray.ArraySize = 1;
+					auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, &render_target_desc, &h->pass.render_target_view[i]);
+					assert(SUCCEEDED(res));
+				}
+				else
+				{
+					D3D11_RENDER_TARGET_VIEW_DESC render_target_desc{};
+					render_target_desc.Format = dx_format;
+					render_target_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
+					render_target_desc.Texture2DArray.FirstArraySlice = desc.color[i].subresource;
+					render_target_desc.Texture2DArray.ArraySize = 1;
+					auto res = self->device->CreateRenderTargetView(color->texture.texture2d, &render_target_desc, &h->pass.render_target_view[i]);
+					assert(SUCCEEDED(res));
+				}
 			}
 
 			// first time getting the width/height
@@ -1066,30 +1094,57 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 		}
 
-		auto depth = (Renoir_Handle*)desc.depth_stencil.handle;
+		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		if (depth)
 		{
 			assert(depth->texture.render_target);
 			_renoir_dx11_handle_ref(depth);
-			if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			if (depth->texture.cube_map == false)
 			{
-				auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
-				D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
-				depth_view_desc.Format = dx_format;
-				depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
-				auto res = self->device->CreateDepthStencilView(depth->texture.render_color_buffer, &depth_view_desc, &h->pass.depth_stencil_view);
-				assert(SUCCEEDED(res));
+				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
+					depth_view_desc.Format = dx_format;
+					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
+					auto res = self->device->CreateDepthStencilView(depth->texture.render_color_buffer, &depth_view_desc, &h->pass.depth_stencil_view);
+					assert(SUCCEEDED(res));
+				}
+				else
+				{
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
+					depth_view_desc.Format = dx_format;
+					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
+					auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->pass.depth_stencil_view);
+					assert(SUCCEEDED(res));
+				}
 			}
 			else
 			{
-				auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
-				D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
-				depth_view_desc.Format = dx_format;
-				depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-				auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->pass.depth_stencil_view);
-				assert(SUCCEEDED(res));
+				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
+					depth_view_desc.Format = dx_format;
+					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
+					depth_view_desc.Texture2DMSArray.FirstArraySlice = desc.depth_stencil.subresource;
+					depth_view_desc.Texture2DMSArray.ArraySize = 1;
+					auto res = self->device->CreateDepthStencilView(depth->texture.render_color_buffer, &depth_view_desc, &h->pass.depth_stencil_view);
+					assert(SUCCEEDED(res));
+				}
+				else
+				{
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
+					depth_view_desc.Format = dx_format;
+					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
+					depth_view_desc.Texture2DArray.FirstArraySlice = desc.depth_stencil.subresource;
+					depth_view_desc.Texture2DArray.ArraySize = 1;
+					auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->pass.depth_stencil_view);
+					assert(SUCCEEDED(res));
+				}
 			}
-
 			// first time getting the width/height
 			if (width == -1 && height == -1)
 			{
@@ -1130,7 +1185,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 			{
-				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
+				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
 				if (color == nullptr)
 					continue;
 				
@@ -1142,7 +1197,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				_renoir_dx11_command_free(self, command);
 			}
 
-			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.handle;
+			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
 			if (depth)
 			{
 				h->pass.depth_stencil_view->Release();
@@ -1767,7 +1822,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		// from renderbuffer to the texture
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
-			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
+			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 
@@ -1778,23 +1833,23 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto dx_pixel_format = _renoir_pixelformat_to_dx(color->texture.pixel_format);
 			self->context->ResolveSubresource(
 				color->texture.texture2d,
-				0,
+				h->pass.offscreen.color[i].subresource,
 				color->texture.render_color_buffer,
-				0,
+				h->pass.offscreen.color[i].subresource,
 				dx_pixel_format
 			);
 		}
 
 		// resolve depth textures as well
-		auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.handle;
+		auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
 		if (depth && depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
 		{
 			auto dx_pixel_format = _renoir_pixelformat_to_dx(depth->texture.pixel_format);
 			self->context->ResolveSubresource(
 				depth->texture.texture2d,
-				0,
+				h->pass.offscreen.depth_stencil.subresource,
 				depth->texture.render_color_buffer,
-				0,
+				h->pass.offscreen.depth_stencil.subresource,
 				dx_pixel_format
 			);
 		}
@@ -2952,24 +3007,24 @@ _renoir_dx11_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 	Renoir_Size size{-1, -1, -1};
 	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 	{
-		if (desc.color[i].handle == nullptr)
+		if (desc.color[i].texture.handle == nullptr)
 			continue;
 
 		if (size.width == -1)
 		{
-			auto h = (Renoir_Handle*)desc.color[i].handle;
+			auto h = (Renoir_Handle*)desc.color[i].texture.handle;
 			size = h->texture.size;
 		}
 		else
 		{
-			auto h = (Renoir_Handle*)desc.color[i].handle;
+			auto h = (Renoir_Handle*)desc.color[i].texture.handle;
 			assert(size.width == h->texture.size.width &&
 				   size.height == h->texture.size.height);
 		}
 	}
-	if (desc.depth_stencil.handle && size.width != -1)
+	if (desc.depth_stencil.texture.handle && size.width != -1)
 	{
-		auto h = (Renoir_Handle*)desc.depth_stencil.handle;
+		auto h = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		assert(size.width == h->texture.size.width &&
 			   size.height == h->texture.size.height);
 	}

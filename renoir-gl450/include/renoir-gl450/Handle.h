@@ -68,7 +68,7 @@ struct Renoir_Handle
 			bool mipmaps;
 			bool render_target;
 			RENOIR_MSAA_MODE msaa;
-			GLuint render_buffer;
+			GLuint render_buffer[6];
 		} texture;
 
 		struct

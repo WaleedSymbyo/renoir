@@ -309,9 +309,15 @@ typedef struct Renoir_Texture_Edit_Desc {
 	size_t bytes_size;
 } Renoir_Texture_Read_Desc;
 
+typedef struct Renoir_Pass_Attachment {
+	Renoir_Texture texture;
+	// this is used for cube maps and it should hold face index (RENOIR_CUBE_FACE), otherwise it should be 0
+	int subresource;
+} Renoir_Pass_Attachment;
+
 typedef struct Renoir_Pass_Offscreen_Desc {
-	Renoir_Texture color[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
-	Renoir_Texture depth_stencil;
+	Renoir_Pass_Attachment color[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
+	Renoir_Pass_Attachment depth_stencil;
 } Renoir_Pass_Offscreen_Desc;
 
 struct IRenoir;

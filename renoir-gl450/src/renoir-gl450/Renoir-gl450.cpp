@@ -1154,19 +1154,40 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		glCreateFramebuffers(1, &h->pass.fb);
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
-			auto color = (Renoir_Handle*)desc.color[i].handle;
+			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 			assert(color->texture.render_target);
 
 			_renoir_gl450_handle_ref(color);
-			if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			if (color->texture.cube_map == false)
 			{
-				glNamedFramebufferRenderbuffer(h->pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer);
+				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					glNamedFramebufferRenderbuffer(h->pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[0]);
+				}
+				else
+				{
+					glNamedFramebufferTexture(h->pass.fb, GL_COLOR_ATTACHMENT0+i, color->texture.id, 0);
+				}
 			}
 			else
 			{
-				glNamedFramebufferTexture(h->pass.fb, GL_COLOR_ATTACHMENT0+i, color->texture.id, 0);
+				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					glNamedFramebufferRenderbuffer(h->pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[desc.color[i].subresource]);
+				}
+				else
+				{
+					glBindFramebuffer(GL_FRAMEBUFFER, h->pass.fb);
+					glFramebufferTexture2D(
+						GL_FRAMEBUFFER,
+						GL_COLOR_ATTACHMENT0 + i,
+						GL_TEXTURE_CUBE_MAP_POSITIVE_X + desc.color[i].subresource,
+						color->texture.id,
+						0
+					);
+				}
 			}
 
 			// first time getting the width/height
@@ -1192,18 +1213,39 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 		}
 
-		auto depth = (Renoir_Handle*)desc.depth_stencil.handle;
+		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		if (depth)
 		{
 			assert(depth->texture.render_target);
 			_renoir_gl450_handle_ref(depth);
-			if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			if (depth->texture.cube_map == false)
 			{
-				glNamedFramebufferRenderbuffer(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer);
+				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					glNamedFramebufferRenderbuffer(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[0]);
+				}
+				else
+				{
+					glNamedFramebufferTexture(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+				}
 			}
 			else
 			{
-				glNamedFramebufferTexture(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					glNamedFramebufferRenderbuffer(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[desc.depth_stencil.subresource]);
+				}
+				else
+				{
+					glBindFramebuffer(GL_FRAMEBUFFER, h->pass.fb);
+					glFramebufferTexture2D(
+						GL_FRAMEBUFFER,
+						GL_DEPTH_STENCIL_ATTACHMENT,
+						GL_TEXTURE_CUBE_MAP_POSITIVE_X + desc.depth_stencil.subresource,
+						depth->texture.id,
+						0
+					);
+				}
 			}
 
 			// first time getting the width/height
@@ -1247,7 +1289,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 			{
-				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
+				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
 				if (color == nullptr)
 					continue;
 				
@@ -1258,7 +1300,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				_renoir_gl450_command_free(self, command);
 			}
 
-			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.handle;
+			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
 			if (depth)
 			{
 				// issue command to free the depth texture
@@ -1368,9 +1410,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				// create renderbuffer to handle msaa
 				if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					glCreateRenderbuffers(1, &h->texture.render_buffer);
+					glCreateRenderbuffers(1, &h->texture.render_buffer[0]);
 					glNamedRenderbufferStorageMultisample(
-						h->texture.render_buffer,
+						h->texture.render_buffer[0],
 						(GLsizei)desc.msaa,
 						gl_internal_format,
 						desc.size.width,
@@ -1400,6 +1442,23 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 						desc.data[i]
 					);
 				}
+
+				// create renderbuffer to handle msaa
+				if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					for (int i = 0; i < 6; ++i)
+					{
+						glCreateRenderbuffers(1, &h->texture.render_buffer[i]);
+						glNamedRenderbufferStorageMultisample(
+							h->texture.render_buffer[i],
+							(GLsizei)desc.msaa,
+							gl_internal_format,
+							desc.size.width,
+							desc.size.height
+						);
+					}
+				}
+
 				if (h->texture.mipmaps)
 					glGenerateTextureMipmap(h->texture.id);
 			}
@@ -1437,9 +1496,12 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		glDeleteTextures(1, &h->texture.id);
-		if (h->texture.render_buffer != 0)
+		for (int i = 0; i < 6; ++i)
 		{
-			glDeleteRenderbuffers(1, &h->texture.render_buffer);
+			if (h->texture.render_buffer[i] == 0)
+				continue;
+
+			glDeleteRenderbuffers(1, &h->texture.render_buffer[i]);
 		}
 		_renoir_gl450_handle_free(self, h);
 		assert(_renoir_gl450_check());
@@ -1674,7 +1736,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		// from renderbuffer to the texture
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
-			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].handle;
+			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 
@@ -1682,8 +1744,24 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			if (color->texture.msaa == RENOIR_MSAA_MODE_NONE)
 				continue;
 
-			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0, color->texture.id, 0);
-			glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+			if (color->texture.cube_map == false)
+			{
+				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0, color->texture.id, 0);
+				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+			}
+			else
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, self->msaa_resolve_fb);
+				glFramebufferTexture2D(
+					GL_FRAMEBUFFER,
+					GL_COLOR_ATTACHMENT0,
+					GL_TEXTURE_CUBE_MAP_POSITIVE_X + h->pass.offscreen.color[i].subresource,
+					color->texture.id,
+					0
+				);
+				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+			}
+
 			glNamedFramebufferReadBuffer(h->pass.fb, GL_COLOR_ATTACHMENT0 + i);
 			glBlitNamedFramebuffer(
 				h->pass.fb,
@@ -1697,10 +1775,24 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		assert(_renoir_gl450_check());
 
 		// resolve depth textures as well
-		auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.handle;
+		auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
 		if (depth && depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
 		{
-			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+			if (depth->texture.cube_map == false)
+			{
+				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+			}
+			else
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, self->msaa_resolve_fb);
+				glFramebufferTexture2D(
+					GL_FRAMEBUFFER,
+					GL_DEPTH_STENCIL_ATTACHMENT,
+					GL_TEXTURE_CUBE_MAP_POSITIVE_X + h->pass.offscreen.depth_stencil.subresource,
+					depth->texture.id,
+					0
+				);
+			}
 			glBlitNamedFramebuffer(
 				h->pass.fb,
 				self->msaa_resolve_fb,
@@ -2736,24 +2828,24 @@ _renoir_gl450_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 	Renoir_Size size{-1, -1, -1};
 	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 	{
-		if (desc.color[i].handle == nullptr)
+		if (desc.color[i].texture.handle == nullptr)
 			continue;
 
 		if (size.width == -1)
 		{
-			auto h = (Renoir_Handle*)desc.color[i].handle;
+			auto h = (Renoir_Handle*)desc.color[i].texture.handle;
 			size = h->texture.size;
 		}
 		else
 		{
-			auto h = (Renoir_Handle*)desc.color[i].handle;
+			auto h = (Renoir_Handle*)desc.color[i].texture.handle;
 			assert(size.width == h->texture.size.width &&
 				   size.height == h->texture.size.height);
 		}
 	}
-	if (desc.depth_stencil.handle && size.width != -1)
+	if (desc.depth_stencil.texture.handle && size.width != -1)
 	{
-		auto h = (Renoir_Handle*)desc.depth_stencil.handle;
+		auto h = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		assert(size.width == h->texture.size.width &&
 			   size.height == h->texture.size.height);
 	}
