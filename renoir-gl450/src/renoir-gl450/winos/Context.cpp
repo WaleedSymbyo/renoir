@@ -235,6 +235,8 @@ renoir_gl450_context_new(Renoir_Settings* settings, void*)
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 	glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
 
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
 	wglDeleteContext(fake_ctx);
 	ReleaseDC(fake_wnd, fake_dc);
 	DestroyWindow(fake_wnd);

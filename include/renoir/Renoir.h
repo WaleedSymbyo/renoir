@@ -54,6 +54,7 @@ typedef enum RENOIR_PIXELFORMAT {
 	RENOIR_PIXELFORMAT_R16I,
 	RENOIR_PIXELFORMAT_R16F,
 	RENOIR_PIXELFORMAT_R32F,
+	RENOIR_PIXELFORMAT_R16G16B16A16F,
 	RENOIR_PIXELFORMAT_R32G32F,
 	RENOIR_PIXELFORMAT_D24S8,
 	RENOIR_PIXELFORMAT_D32,
@@ -170,6 +171,16 @@ typedef enum RENOIR_TEXTURE_ORIGIN {
 	RENOIR_TEXTURE_ORIGIN_BOTTOM_LEFT
 } RENOIR_TEXTURE_ORIGIN;
 
+typedef enum RENOIR_CUBE_FACE
+{
+	RENOIR_CUBE_FACE_POS_X,
+	RENOIR_CUBE_FACE_NEG_X,
+	RENOIR_CUBE_FACE_POS_Y,
+	RENOIR_CUBE_FACE_NEG_Y,
+	RENOIR_CUBE_FACE_POS_Z,
+	RENOIR_CUBE_FACE_NEG_Z
+} RENOIR_CUBE_FACE;
+
 // Handles
 typedef struct Renoir_Buffer { void* handle; } Renoir_Buffer;
 typedef struct Renoir_Pipeline { void* handle; } Renoir_Pipeline;
@@ -239,12 +250,17 @@ typedef struct Renoir_Texture_Desc {
 	Renoir_Size size; // you can only fill what you need (1D = width, 2D = width, and height, 3D = width, height, and depth)
 	RENOIR_USAGE usage; // default: RENOIR_USAGE_STATIC
 	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
+	RENOIR_PIXELFORMAT pixel_format;
+	bool mipmaps; // default: false, if true will generate mipmaps for the texture
+	// by default use data[0], in case of cube map index the array with RENOIR_CUBE_FACE and set data pointers accordingly
+	void* data[6]; // you can pass null here to only allocate texture without initializing it
+	size_t data_size;
+	// render target
 	bool render_target; // default: false
 	RENOIR_MSAA_MODE msaa; // default: RENOIR_MSAA_MODE_NONE
+	// cube map
+	bool cube_map; // default: false, should be true in case of a cube map texture
 	Renoir_Sampler_Desc sampler; // default: see sampler default
-	RENOIR_PIXELFORMAT pixel_format;
-	void* data; // you can pass null here to only allocate texture without initializing it
-	size_t data_size;
 } Renoir_Texture_Desc;
 
 typedef struct Renoir_Shader_Blob {

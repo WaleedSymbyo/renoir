@@ -348,6 +348,9 @@ _renoir_pixelformat_to_internal_gl(RENOIR_PIXELFORMAT format)
 	case RENOIR_PIXELFORMAT_R32F:
 		res = GL_R32F;
 		break;
+	case RENOIR_PIXELFORMAT_R16G16B16A16F:
+		res = GL_RGBA16F;
+		break;
 	case RENOIR_PIXELFORMAT_R32G32F:
 		res = GL_RG32F;
 		break;
@@ -374,6 +377,7 @@ _renoir_pixelformat_to_gl(RENOIR_PIXELFORMAT format)
 	switch (format)
 	{
 	case RENOIR_PIXELFORMAT_RGBA8:
+	case RENOIR_PIXELFORMAT_R16G16B16A16F:
 		res = GL_RGBA;
 		break;
 	case RENOIR_PIXELFORMAT_R16I:
@@ -413,11 +417,10 @@ _renoir_pixelformat_to_type_gl(RENOIR_PIXELFORMAT format)
 	case RENOIR_PIXELFORMAT_R16I:
 		res = GL_SHORT;
 		break;
-	case RENOIR_PIXELFORMAT_R16F:
-		res = GL_HALF_FLOAT;
-		break;
 	case RENOIR_PIXELFORMAT_R32F:
 	case RENOIR_PIXELFORMAT_R32G32F:
+	case RENOIR_PIXELFORMAT_R16G16B16A16F:
+	case RENOIR_PIXELFORMAT_R16F:
 		res = GL_FLOAT;
 		break;
 	case RENOIR_PIXELFORMAT_D32:
@@ -544,7 +547,28 @@ _renoir_type_normalized(RENOIR_TYPE type)
 }
 
 inline static GLenum
-_renoir_filter_to_gl(RENOIR_FILTER filter)
+_renoir_min_filter_to_gl(RENOIR_FILTER filter)
+{
+	GLenum res = 0;
+	switch (filter)
+	{
+	case RENOIR_FILTER_POINT:
+		res = GL_NEAREST_MIPMAP_NEAREST;
+		break;
+
+	case RENOIR_FILTER_LINEAR:
+		res = GL_LINEAR_MIPMAP_LINEAR;
+		break;
+
+	default:
+		assert(false && "unreachable");
+		break;
+	}
+	return res;
+}
+
+inline static GLenum
+_renoir_mag_filter_to_gl(RENOIR_FILTER filter)
 {
 	GLenum res = 0;
 	switch (filter)
@@ -963,7 +987,15 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_TEXTURE_NEW:
 	{
 		if(command->texture_new.owns_data)
-			mn::free(mn::Block{(void*)command->texture_new.desc.data, command->texture_new.desc.data_size});
+		{
+			for (int i = 0; i < 6; ++i)
+			{
+				if (command->texture_new.desc.data[i] == nullptr)
+					continue;
+
+				mn::free(mn::Block{(void*)command->texture_new.desc.data[i], command->texture_new.desc.data_size});
+			}
+		}
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PROGRAM_NEW:
@@ -1277,6 +1309,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		h->texture.pixel_format = desc.pixel_format;
 		h->texture.usage = desc.usage;
 		h->texture.size = desc.size;
+		h->texture.mipmaps = desc.mipmaps;
+		h->texture.cube_map = desc.cube_map;
 		h->texture.render_target = desc.render_target;
 		h->texture.msaa = desc.msaa;
 		h->texture.default_sampler_desc = desc.sampler;
@@ -1292,7 +1326,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glCreateTextures(GL_TEXTURE_1D, 1, &h->texture.id);
 			// 1D texture
 			glTextureStorage1D(h->texture.id, 1, gl_internal_format, desc.size.width);
-			if (desc.data != nullptr)
+			if (desc.data[0] != nullptr)
 			{
 				glTextureSubImage1D(
 					h->texture.id,
@@ -1301,41 +1335,73 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					desc.size.width,
 					gl_format,
 					gl_type,
-					desc.data
+					desc.data[0]
 				);
+				if (h->texture.mipmaps)
+					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
 		else if (desc.size.height > 0 && desc.size.depth == 0)
 		{
-			glCreateTextures(GL_TEXTURE_2D, 1, &h->texture.id);
-			// 2D texture
-			glTextureStorage2D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height);
-			if (desc.data != nullptr)
+			if (desc.cube_map == false)
 			{
-				glTextureSubImage2D(
-					h->texture.id,
-					0,
-					0,
-					0,
-					desc.size.width,
-					desc.size.height,
-					gl_format,
-					gl_type,
-					desc.data
-				);
-			}
+				glCreateTextures(GL_TEXTURE_2D, 1, &h->texture.id);
+				// 2D texture
+				glTextureStorage2D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height);
+				if (desc.data[0] != nullptr)
+				{
+					glTextureSubImage2D(
+						h->texture.id,
+						0,
+						0,
+						0,
+						desc.size.width,
+						desc.size.height,
+						gl_format,
+						gl_type,
+						desc.data[0]
+					);
+					if (h->texture.mipmaps)
+						glGenerateTextureMipmap(h->texture.id);
+				}
 
-			// create renderbuffer to handle msaa
-			if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
+				// create renderbuffer to handle msaa
+				if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
+				{
+					glCreateRenderbuffers(1, &h->texture.render_buffer);
+					glNamedRenderbufferStorageMultisample(
+						h->texture.render_buffer,
+						(GLsizei)desc.msaa,
+						gl_internal_format,
+						desc.size.width,
+						desc.size.height
+					);
+				}
+			}
+			else
 			{
-				glCreateRenderbuffers(1, &h->texture.render_buffer);
-				glNamedRenderbufferStorageMultisample(
-					h->texture.render_buffer,
-					(GLsizei)desc.msaa,
-					gl_internal_format,
-					desc.size.width,
-					desc.size.height
-				);
+				glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &h->texture.id);
+				glTextureStorage2D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height);
+				for (size_t i = 0; i < 6; ++i)
+				{
+					if (desc.data[i] == nullptr)
+						continue;
+					glTextureSubImage3D(
+						h->texture.id,
+						0,
+						0,
+						0,
+						i,
+						desc.size.width,
+						desc.size.height,
+						1,
+						gl_format,
+						gl_type,
+						desc.data[i]
+					);
+				}
+				if (h->texture.mipmaps)
+					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
 		else if (desc.size.height > 0 && desc.size.depth > 0)
@@ -1343,7 +1409,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glCreateTextures(GL_TEXTURE_3D, 1, &h->texture.id);
 			// 3D texture
 			glTextureStorage3D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height, desc.size.depth);
-			if (desc.data != nullptr)
+			if (desc.data[0] != nullptr)
 			{
 				glTextureSubImage3D(
 					h->texture.id,
@@ -1356,8 +1422,10 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					desc.size.depth,
 					gl_format,
 					gl_type,
-					desc.data
+					desc.data[0]
 				);
+				if (h->texture.mipmaps)
+					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
 		assert(_renoir_gl450_check());
@@ -1383,15 +1451,16 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto& desc = command->sampler_new.desc;
 		h->sampler.desc = desc;
 
-		auto gl_filter = _renoir_filter_to_gl(desc.filter);
+		auto gl_min_filter = _renoir_min_filter_to_gl(desc.filter);
+		auto gl_mag_filter = _renoir_mag_filter_to_gl(desc.filter);
 		auto gl_u_texmode = _renoir_texmode_to_gl(desc.u);
 		auto gl_v_texmode = _renoir_texmode_to_gl(desc.v);
 		auto gl_w_texmode = _renoir_texmode_to_gl(desc.w);
 		auto gl_compare = _renoir_compare_to_gl(desc.compare);
 
 		glGenSamplers(1, &h->sampler.id);
-		glSamplerParameteri(h->sampler.id, GL_TEXTURE_MIN_FILTER, gl_filter);
-		glSamplerParameteri(h->sampler.id, GL_TEXTURE_MAG_FILTER, gl_filter);
+		glSamplerParameteri(h->sampler.id, GL_TEXTURE_MIN_FILTER, gl_min_filter);
+		glSamplerParameteri(h->sampler.id, GL_TEXTURE_MAG_FILTER, gl_mag_filter);
 
 		glSamplerParameteri(h->sampler.id, GL_TEXTURE_WRAP_S, gl_u_texmode);
 		glSamplerParameteri(h->sampler.id, GL_TEXTURE_WRAP_T, gl_v_texmode);
@@ -1774,21 +1843,47 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				gl_type,
 				command->texture_write.desc.bytes
 			);
+			if (h->texture.mipmaps)
+				glGenerateTextureMipmap(h->texture.id);
 		}
 		else if (h->texture.size.height > 0 && h->texture.size.depth == 0)
 		{
-			// 2D texture
-			glTextureSubImage2D(
-				h->texture.id,
-				0,
-				command->texture_write.desc.x,
-				command->texture_write.desc.y,
-				command->texture_write.desc.width,
-				command->texture_write.desc.height,
-				gl_format,
-				gl_type,
-				command->texture_write.desc.bytes
-			);
+			if (h->texture.cube_map == false)
+			{
+				// 2D texture
+				glTextureSubImage2D(
+					h->texture.id,
+					0,
+					command->texture_write.desc.x,
+					command->texture_write.desc.y,
+					command->texture_write.desc.width,
+					command->texture_write.desc.height,
+					gl_format,
+					gl_type,
+					command->texture_write.desc.bytes
+				);
+				if (h->texture.mipmaps)
+					glGenerateTextureMipmap(h->texture.id);
+			}
+			else
+			{
+				// Cube Map texture
+				glTextureSubImage3D(
+					h->texture.id,
+					0,
+					command->texture_write.desc.x,
+					command->texture_write.desc.y,
+					command->texture_write.desc.z,
+					command->texture_write.desc.width,
+					command->texture_write.desc.height,
+					1,
+					gl_format,
+					gl_type,
+					command->texture_write.desc.bytes
+				);
+				if (h->texture.mipmaps)
+					glGenerateTextureMipmap(h->texture.id);
+			}
 		}
 		else if (h->texture.size.height > 0 && h->texture.size.depth > 0)
 		{
@@ -1806,6 +1901,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				gl_type,
 				command->texture_write.desc.bytes
 			);
+			if (h->texture.mipmaps)
+				glGenerateTextureMipmap(h->texture.id);
 		}
 		assert(_renoir_gl450_check());
 		break;
@@ -1849,21 +1946,42 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		}
 		else if (h->texture.size.height > 0 && h->texture.size.depth == 0)
 		{
-			// 2D texture
-			glGetTextureSubImage(
-				h->texture.id,
-				0,
-				command->texture_read.desc.x,
-				command->texture_read.desc.y,
-				0,
-				command->texture_read.desc.width,
-				command->texture_read.desc.height,
-				0,
-				gl_format,
-				gl_type,
-				command->texture_read.desc.bytes_size,
-				command->texture_read.desc.bytes
-			);
+			if (h->texture.cube_map == false)
+			{
+				// 2D texture
+				glGetTextureSubImage(
+					h->texture.id,
+					0,
+					command->texture_read.desc.x,
+					command->texture_read.desc.y,
+					0,
+					command->texture_read.desc.width,
+					command->texture_read.desc.height,
+					0,
+					gl_format,
+					gl_type,
+					command->texture_read.desc.bytes_size,
+					command->texture_read.desc.bytes
+				);
+			}
+			else
+			{
+				// 2D texture
+				glGetTextureSubImage(
+					h->texture.id,
+					0,
+					command->texture_read.desc.x,
+					command->texture_read.desc.y,
+					command->texture_read.desc.z,
+					command->texture_read.desc.width,
+					command->texture_read.desc.height,
+					1,
+					gl_format,
+					gl_type,
+					command->texture_read.desc.bytes_size,
+					command->texture_read.desc.bytes
+				);
+			}
 		}
 		else if (h->texture.size.height > 0 && h->texture.size.depth > 0)
 		{
@@ -1913,8 +2031,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 			else if (h->texture.size.height > 0 && h->texture.size.depth == 0)
 			{
-				// 2D texture
-				glBindTexture(GL_TEXTURE_2D, h->texture.id);
+				if (h->texture.cube_map == false)
+				{
+					// 2D texture
+					glBindTexture(GL_TEXTURE_2D, h->texture.id);
+				}
+				else
+				{
+					glBindTexture(GL_TEXTURE_CUBE_MAP, h->texture.id);
+				}
 			}
 			else if (h->texture.size.height > 0 && h->texture.size.depth > 0)
 			{
@@ -2315,6 +2440,11 @@ _renoir_gl450_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 		assert(false && "a static texture should have data to initialize it");
 	}
 
+	if (desc.cube_map)
+	{
+		assert(desc.size.width == desc.size.height && "width should equal height in cube map texture");
+	}
+
 	auto self = api->ctx;
 
 	mn::mutex_lock(self->mtx);
@@ -2326,10 +2456,13 @@ _renoir_gl450_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 	command->texture_new.desc = desc;
 	if (self->settings.defer_api_calls)
 	{
-		if (desc.data)
+		for (int i = 0; i < 6; ++i)
 		{
-			command->texture_new.desc.data = mn::alloc(desc.data_size, alignof(char)).ptr;
-			::memcpy(command->texture_new.desc.data, desc.data, desc.data_size);
+			if (desc.data[i] == nullptr)
+				continue;
+
+			command->texture_new.desc.data[i] = mn::alloc(desc.data_size, alignof(char)).ptr;
+			::memcpy(command->texture_new.desc.data[i], desc.data[i], desc.data_size);
 			command->texture_new.owns_data = true;
 		}
 	}

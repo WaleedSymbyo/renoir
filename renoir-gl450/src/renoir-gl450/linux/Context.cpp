@@ -177,6 +177,8 @@ renoir_gl450_context_new(Renoir_Settings* settings, void* given_display)
 	glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ZERO, GL_ONE);
 	glBlendEquationSeparate(GL_FUNC_ADD, GL_FUNC_ADD);
 
+	glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
+
 	XSync(display, False);
 
 	auto self = mn::alloc_zerod<Renoir_GL450_Context>();
