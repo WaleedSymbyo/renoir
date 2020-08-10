@@ -235,6 +235,7 @@ typedef struct Renoir_Buffer_Desc {
 	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
 	void* data; // you can pass null here to only allocate buffer without initializing it
 	size_t data_size;
+	size_t compute_buffer_stride;
 } Renoir_Buffer_Desc;
 
 typedef struct Renoir_Sampler_Desc {
@@ -369,6 +370,7 @@ typedef struct Renoir
 	void (*clear)(struct Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc);
 	void (*use_pipeline)(struct Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeline);
 	void (*use_program)(struct Renoir* api, Renoir_Pass pass, Renoir_Program program);
+	void (*use_compute)(struct Renoir* api, Renoir_Pass pass, Renoir_Compute compute);
 	void (*scissor)(struct Renoir* api, Renoir_Pass pass, int x, int y, int width, int height);
 	// Write Functions
 	void (*buffer_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size);
@@ -380,8 +382,12 @@ typedef struct Renoir
 	void (*buffer_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, RENOIR_SHADER shader, int slot);
 	void (*texture_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot);
 	void (*texture_sampler_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler);
+	// Compute Bind Functions
+	void (*texture_compute_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access);
 	// Draw
 	void (*draw)(struct Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc);
+	// Dispatch
+	void (*dispatch)(struct Renoir* api, Renoir_Pass pass, int x, int y, int z);
 } Renoir;
 
 #define RENOIR_API "renoir"

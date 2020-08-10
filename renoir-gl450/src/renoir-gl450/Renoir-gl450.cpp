@@ -437,6 +437,44 @@ _renoir_pixelformat_to_type_gl(RENOIR_PIXELFORMAT format)
 }
 
 inline static GLenum
+_renoir_pixelformat_to_gl_compute(RENOIR_PIXELFORMAT format)
+{
+	GLenum res = 0;
+	switch(format)
+	{
+	case RENOIR_PIXELFORMAT_RGBA8:
+		res = GL_RGBA8;
+		break;
+	case RENOIR_PIXELFORMAT_R16I:
+		res = GL_R16I;
+		break;
+	case RENOIR_PIXELFORMAT_R16F:
+		res = GL_R16F;
+		break;
+	case RENOIR_PIXELFORMAT_R32F:
+		res = GL_R32F;
+		break;
+	case RENOIR_PIXELFORMAT_R16G16B16A16F:
+		res = GL_RGBA16F;
+		break;
+	case RENOIR_PIXELFORMAT_R32G32F:
+		res = GL_RG32F;
+		break;
+	case RENOIR_PIXELFORMAT_D24S8:
+	case RENOIR_PIXELFORMAT_D32:
+		res = GL_R32F;
+		break;
+	case RENOIR_PIXELFORMAT_R8:
+		res = GL_R8UI;
+		break;
+	default:
+		assert(false && "unreachable");
+		break;
+	}
+	return res;
+}
+
+inline static GLenum
 _renoir_type_to_gl(RENOIR_TYPE type)
 {
 	GLenum res = 0;
@@ -684,6 +722,28 @@ _renoir_primitive_to_gl(RENOIR_PRIMITIVE p)
 	return res;
 }
 
+inline static GLenum
+_renoir_access_to_gl(RENOIR_ACCESS a)
+{
+	GLenum res = 0;
+	switch(a)
+	{
+	case RENOIR_ACCESS_READ:
+		res = GL_READ_ONLY;
+		break;
+	case RENOIR_ACCESS_WRITE:
+		res = GL_WRITE_ONLY;
+		break;
+	case RENOIR_ACCESS_READ_WRITE:
+		res = GL_READ_WRITE;
+		break;
+	default:
+		assert(false && "unreachable");
+		break;
+	}
+	return res;
+}
+
 
 enum RENOIR_COMMAND_KIND
 {
@@ -711,6 +771,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_PASS_CLEAR,
 	RENOIR_COMMAND_KIND_USE_PIPELINE,
 	RENOIR_COMMAND_KIND_USE_PROGRAM,
+	RENOIR_COMMAND_KIND_USE_COMPUTE,
 	RENOIR_COMMAND_KIND_SCISSOR,
 	RENOIR_COMMAND_KIND_BUFFER_WRITE,
 	RENOIR_COMMAND_KIND_TEXTURE_WRITE,
@@ -718,7 +779,8 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_TEXTURE_READ,
 	RENOIR_COMMAND_KIND_BUFFER_BIND,
 	RENOIR_COMMAND_KIND_TEXTURE_BIND,
-	RENOIR_COMMAND_KIND_DRAW
+	RENOIR_COMMAND_KIND_DRAW,
+	RENOIR_COMMAND_KIND_DISPATCH
 };
 
 struct Renoir_Command
@@ -855,6 +917,11 @@ struct Renoir_Command
 
 		struct
 		{
+			Renoir_Handle* compute;
+		} use_compute;
+
+		struct
+		{
 			int x, y, w, h;
 		} scissor;
 
@@ -899,12 +966,18 @@ struct Renoir_Command
 			RENOIR_SHADER shader;
 			int slot;
 			Renoir_Handle* sampler;
+			RENOIR_ACCESS gpu_access;
 		} texture_bind;
 
 		struct
 		{
 			Renoir_Draw_Desc desc;
 		} draw;
+
+		struct
+		{
+			int x, y, z;
+		} dispatch;
 	};
 };
 
@@ -1013,6 +1086,7 @@ struct IRenoir
 	// command execution context
 	Renoir_Handle* current_pipeline;
 	Renoir_Handle* current_program;
+	Renoir_Handle* current_compute;
 
 	// caches
 	GLuint vao;
@@ -1141,12 +1215,14 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
 	case RENOIR_COMMAND_KIND_USE_PIPELINE:
 	case RENOIR_COMMAND_KIND_USE_PROGRAM:
+	case RENOIR_COMMAND_KIND_USE_COMPUTE:
 	case RENOIR_COMMAND_KIND_SCISSOR:
 	case RENOIR_COMMAND_KIND_BUFFER_READ:
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
 	case RENOIR_COMMAND_KIND_DRAW:
+	case RENOIR_COMMAND_KIND_DISPATCH:
 	default:
 		// do nothing
 		break;
@@ -1421,6 +1497,14 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		h->buffer.access = desc.access;
 		h->buffer.type = desc.type;
 		h->buffer.usage = desc.usage;
+
+		if (desc.type == RENOIR_BUFFER_COMPUTE)
+		{
+			assert(
+				desc.compute_buffer_stride > 0 && desc.compute_buffer_stride % 4 == 0 &&
+				"compute buffer stride should be greater than 0, no greater than 2048, and a multiple of 4"
+			);
+		}
 
 		auto gl_usage = _renoir_usage_to_gl(desc.usage);
 
@@ -1998,7 +2082,17 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->use_program.program;
 		self->current_program = h;
+		self->current_compute = nullptr;
 		glUseProgram(self->current_program->program.id);
+		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_USE_COMPUTE:
+	{
+		auto h = command->use_compute.compute;
+		self->current_compute = h;
+		self->current_program = nullptr;
+		glUseProgram(self->current_compute->compute.id);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -2215,7 +2309,19 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		glActiveTexture(GL_TEXTURE0 + command->texture_bind.slot);
 		if (command->texture_bind.shader == RENOIR_SHADER_COMPUTE)
 		{
-			assert(false && "unimplmeneted");
+			auto gl_format = _renoir_pixelformat_to_gl_compute(h->texture.pixel_format);
+			auto gl_gpu_access = _renoir_access_to_gl(command->texture_bind.gpu_access);
+
+			glActiveTexture(GL_TEXTURE0 + command->texture_bind.slot);
+			glBindImageTexture(
+				command->texture_bind.slot,
+				h->texture.id,
+				0,
+				GL_FALSE,
+				0,
+				gl_gpu_access,
+				gl_format
+			);
 		}
 		else
 		{
@@ -2250,6 +2356,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_DRAW:
 	{
+		assert(self->current_pipeline && self->current_program && "you should use a program and a pipeline before drawing");
+
 		auto& desc = command->draw.desc;
 		glBindVertexArray(self->vao);
 
@@ -2320,6 +2428,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			else
 				glDrawArrays(gl_primitive, desc.base_element, desc.elements_count);
 		}
+		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_DISPATCH:
+	{
+		assert(self->current_compute && "you should use a compute before dispatching it");
+		glDispatchCompute(command->dispatch.x, command->dispatch.y, command->dispatch.z);
+		// Note(Moustapha): not sure about this barrier
+		glMemoryBarrier(GL_ALL_BARRIER_BITS);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -3119,6 +3236,20 @@ _renoir_gl450_use_program(Renoir* api, Renoir_Pass pass, Renoir_Program program)
 }
 
 static void
+_renoir_gl450_use_compute(Renoir* api, Renoir_Pass pass, Renoir_Compute compute)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_USE_COMPUTE);
+	mn::mutex_unlock(self->mtx);
+
+	command->use_compute.compute = (Renoir_Handle*)compute.handle;
+	_renoir_gl450_command_push(&h->pass, command);
+}
+
+static void
 _renoir_gl450_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, int height)
 {
 	auto self = api->ctx;
@@ -3263,6 +3394,28 @@ _renoir_gl450_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 }
 
 static void
+_renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	auto htex = (Renoir_Handle*)texture.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto sampler = _renoir_gl450_sampler_get(self, htex->texture.default_sampler_desc);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
+	mn::mutex_unlock(self->mtx);
+
+	command->texture_bind.handle = htex;
+	command->texture_bind.shader = RENOIR_SHADER_COMPUTE;
+	command->texture_bind.slot = slot;
+	command->texture_bind.sampler = sampler;
+	command->texture_bind.gpu_access = gpu_access;
+
+	_renoir_gl450_command_push(&h->pass, command);
+}
+
+static void
 _renoir_gl450_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler)
 {
 	auto self = api->ctx;
@@ -3294,6 +3447,25 @@ _renoir_gl450_draw(Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc)
 	mn::mutex_unlock(self->mtx);
 
 	command->draw.desc = desc;
+
+	_renoir_gl450_command_push(&h->pass, command);
+}
+
+static void
+_renoir_gl450_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
+{
+	assert(x >= 0 && y >= 0 && z >= 0);
+
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_DISPATCH);
+	mn::mutex_unlock(self->mtx);
+
+	command->dispatch.x = x;
+	command->dispatch.y = y;
+	command->dispatch.z = z;
 
 	_renoir_gl450_command_push(&h->pass, command);
 }
@@ -3343,6 +3515,7 @@ _renoir_load_api(Renoir* api)
 	api->clear = _renoir_gl450_clear;
 	api->use_pipeline = _renoir_gl450_use_pipeline;
 	api->use_program = _renoir_gl450_use_program;
+	api->use_compute = _renoir_gl450_use_compute;
 	api->scissor = _renoir_gl450_scissor;
 	api->buffer_write = _renoir_gl450_buffer_write;
 	api->texture_write = _renoir_gl450_texture_write;
@@ -3351,7 +3524,9 @@ _renoir_load_api(Renoir* api)
 	api->buffer_bind = _renoir_gl450_buffer_bind;
 	api->texture_bind = _renoir_gl450_texture_bind;
 	api->texture_sampler_bind = _renoir_gl450_texture_sampler_bind;
+	api->texture_compute_bind = _renoir_gl450_texture_compute_bind;
 	api->draw = _renoir_gl450_draw;
+	api->dispatch = _renoir_gl450_dispatch;
 }
 
 Renoir*

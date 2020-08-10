@@ -56,6 +56,19 @@ _renoir_access_to_dx(RENOIR_ACCESS access)
 	}
 }
 
+inline static int
+_renoir_access_to_dx_buffer_access(RENOIR_ACCESS access)
+{
+	switch(access)
+	{
+	case RENOIR_ACCESS_NONE: return 0;
+	case RENOIR_ACCESS_READ: return D3D11_CPU_ACCESS_READ;
+	case RENOIR_ACCESS_WRITE: return D3D11_CPU_ACCESS_WRITE;
+	case RENOIR_ACCESS_READ_WRITE: return D3D11_CPU_ACCESS_WRITE;
+	default: assert(false && "unreachable"); return 0;
+	}
+}
+
 inline static DXGI_FORMAT
 _renoir_pixelformat_to_dx(RENOIR_PIXELFORMAT format)
 {
@@ -397,6 +410,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_PASS_CLEAR,
 	RENOIR_COMMAND_KIND_USE_PIPELINE,
 	RENOIR_COMMAND_KIND_USE_PROGRAM,
+	RENOIR_COMMAND_KIND_USE_COMPUTE,
 	RENOIR_COMMAND_KIND_SCISSOR,
 	RENOIR_COMMAND_KIND_BUFFER_WRITE,
 	RENOIR_COMMAND_KIND_TEXTURE_WRITE,
@@ -404,7 +418,8 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_TEXTURE_READ,
 	RENOIR_COMMAND_KIND_BUFFER_BIND,
 	RENOIR_COMMAND_KIND_TEXTURE_BIND,
-	RENOIR_COMMAND_KIND_DRAW
+	RENOIR_COMMAND_KIND_DRAW,
+	RENOIR_COMMAND_KIND_DISPATCH
 };
 
 struct Renoir_Command
@@ -547,6 +562,11 @@ struct Renoir_Command
 
 		struct
 		{
+			Renoir_Handle* compute;
+		} use_compute;
+
+		struct
+		{
 			int x, y, w, h;
 		} scissor;
 
@@ -597,6 +617,11 @@ struct Renoir_Command
 		{
 			Renoir_Draw_Desc desc;
 		} draw;
+
+		struct
+		{
+			int x, y, z;
+		} dispatch;
 	};
 };
 
@@ -618,6 +643,7 @@ struct IRenoir
 	// command execution context
 	Renoir_Handle* current_pipeline;
 	Renoir_Handle* current_program;
+	Renoir_Handle* current_compute;
 	Renoir_Handle* current_pass;
 
 	// caches
@@ -742,12 +768,14 @@ _renoir_dx11_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
 	case RENOIR_COMMAND_KIND_USE_PIPELINE:
 	case RENOIR_COMMAND_KIND_USE_PROGRAM:
+	case RENOIR_COMMAND_KIND_USE_COMPUTE:
 	case RENOIR_COMMAND_KIND_SCISSOR:
 	case RENOIR_COMMAND_KIND_BUFFER_READ:
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
 	case RENOIR_COMMAND_KIND_DRAW:
+	case RENOIR_COMMAND_KIND_DISPATCH:
 	default:
 		// do nothing
 		break;
@@ -1224,13 +1252,24 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 		auto dx_buffer_type = _renoir_buffer_type_to_dx(desc.type);
 		auto dx_usage = _renoir_usage_to_dx(desc.usage);
-		auto dx_access = _renoir_access_to_dx(desc.access);
+		auto dx_access = _renoir_access_to_dx_buffer_access(desc.access);
 
 		D3D11_BUFFER_DESC buffer_desc{};
 		buffer_desc.ByteWidth = desc.data_size;
 		buffer_desc.BindFlags = dx_buffer_type;
 		buffer_desc.Usage = dx_usage;
 		buffer_desc.CPUAccessFlags = dx_access;
+		
+		if (desc.type == RENOIR_BUFFER_COMPUTE)
+		{
+			assert(
+				desc.compute_buffer_stride > 0 && desc.compute_buffer_stride % 4 == 0 &&
+				"compute buffer stride should be greater than 0, no greater than 2048, and a multiple of 4"
+			);
+
+			buffer_desc.MiscFlags = D3D11_RESOURCE_MISC_BUFFER_STRUCTURED;
+			buffer_desc.StructureByteStride = desc.compute_buffer_stride;
+		}
 
 		if (desc.data)
 		{
@@ -1905,12 +1944,21 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->use_program.program;
 		self->current_program = h;
+		self->current_compute = nullptr;
 		self->context->VSSetShader(h->program.vertex_shader, NULL, 0);
 		self->context->PSSetShader(h->program.pixel_shader, NULL, 0);
 		if (h->program.geometry_shader)
 			self->context->GSSetShader(h->program.geometry_shader, NULL, 0);
 		if (h->program.input_layout)
 			self->context->IASetInputLayout(h->program.input_layout);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_USE_COMPUTE:
+	{
+		auto h = command->use_compute.compute;
+		self->current_compute = h;
+		self->current_program = nullptr;
+		self->context->CSSetShader(h->compute.compute_shader, NULL, 0);
 		break;
 	}
 	case RENOIR_COMMAND_KIND_SCISSOR:
@@ -2234,6 +2282,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_DRAW:
 	{
+		assert(self->current_pipeline && self->current_program && "you should use a program and a pipeline before drawing");
+
 		auto& desc = command->draw.desc;
 		auto hprogram = self->current_program;
 		if (hprogram->program.input_layout == nullptr)
@@ -2317,6 +2367,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				self->context->Draw(desc.elements_count, desc.base_element);
 			}
 		}
+		break;
+	}
+	case RENOIR_COMMAND_KIND_DISPATCH:
+	{
+		assert(self->current_compute && "you should use a compute before dispatching it");
+		self->context->Dispatch(command->dispatch.x, command->dispatch.y, command->dispatch.z);
 		break;
 	}
 	default:
@@ -2451,12 +2507,17 @@ _renoir_dx11_init(Renoir* api, Renoir_Settings settings, void*)
 			D3D_FEATURE_LEVEL_11_0
 		};
 
+		UINT creation_flags = 0;
+		#if DEBUG
+			creation_flags = D3D11_CREATE_DEVICE_DEBUG;
+		#endif
+
 		// create device and device context
 		res = D3D11CreateDevice(
 			nullptr,
 			D3D_DRIVER_TYPE_HARDWARE,
 			nullptr,
-			0,
+			creation_flags,
 			feature_levels,
 			2,
 			D3D11_SDK_VERSION,
@@ -3178,6 +3239,20 @@ _renoir_dx11_use_program(Renoir* api, Renoir_Pass pass, Renoir_Program program)
 }
 
 static void
+_renoir_dx11_use_compute(Renoir* api, Renoir_Pass pass, Renoir_Compute compute)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_USE_COMPUTE);
+	mn::mutex_unlock(self->mtx);
+
+	command->use_compute.compute = (Renoir_Handle*)compute.handle;
+	_renoir_dx11_command_push(&h->pass, command);
+}
+
+static void
 _renoir_dx11_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, int height)
 {
 	auto self = api->ctx;
@@ -3357,6 +3432,26 @@ _renoir_dx11_draw(Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc)
 	_renoir_dx11_command_push(&h->pass, command);
 }
 
+static void
+_renoir_dx11_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
+{
+	assert(x >= 0 && y >= 0 && z >= 0);
+
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_DISPATCH);
+	mn::mutex_unlock(self->mtx);
+
+	command->dispatch.x = x;
+	command->dispatch.y = y;
+	command->dispatch.z = z;
+
+	_renoir_dx11_command_push(&h->pass, command);
+}
+
+
 inline static void
 _renoir_load_api(Renoir* api)
 {
@@ -3402,6 +3497,7 @@ _renoir_load_api(Renoir* api)
 	api->clear = _renoir_dx11_clear;
 	api->use_pipeline = _renoir_dx11_use_pipeline;
 	api->use_program = _renoir_dx11_use_program;
+	api->use_compute = _renoir_dx11_use_compute;
 	api->scissor = _renoir_dx11_scissor;
 	api->buffer_write = _renoir_dx11_buffer_write;
 	api->texture_write = _renoir_dx11_texture_write;
@@ -3411,6 +3507,7 @@ _renoir_load_api(Renoir* api)
 	api->texture_bind = _renoir_dx11_texture_bind;
 	api->texture_sampler_bind = _renoir_dx11_texture_sampler_bind;
 	api->draw = _renoir_dx11_draw;
+	api->dispatch = _renoir_dx11_dispatch;
 }
 
 Renoir*
