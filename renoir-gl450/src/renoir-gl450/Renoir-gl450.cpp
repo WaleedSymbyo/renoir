@@ -1153,15 +1153,12 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		int msaa = -1;
 		
 		glCreateFramebuffers(1, &h->pass.fb);
-		mn::log_debug("framebuffer {} created", h->pass.fb);
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 			assert(color->texture.render_target);
-
-			mn::log_debug("framebuffer {} color attachment[{}] = texture {}", h->pass.fb, i, color->texture.id);
 
 			_renoir_gl450_handle_ref(color);
 			if (color->texture.cube_map == false)
@@ -1216,15 +1213,11 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(msaa == color->texture.msaa);
 			}
 		}
-		assert(_renoir_gl450_check());
 
 		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		if (depth)
 		{
 			assert(depth->texture.render_target);
-
-			mn::log_debug("framebuffer {} depth attachment = texture {}", h->pass.fb, depth->texture.id);
-
 			_renoir_gl450_handle_ref(depth);
 			if (depth->texture.cube_map == false)
 			{
@@ -1302,7 +1295,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				if (color == nullptr)
 					continue;
 				
-				mn::log_debug("framebuffer {} color detachment[{}] = texture {}", h->pass.fb, i, color->texture.id);
 				// issue command to free the color texture
 				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 				command->texture_free.handle = color;
@@ -1313,13 +1305,11 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			if (depth)
 			{
 				// issue command to free the depth texture
-				mn::log_debug("framebuffer {} depth detachment = texture {}", h->pass.fb, depth->texture.id);
 				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 				command->texture_free.handle = depth;
 				_renoir_gl450_command_process(self, command);
 			}
 
-			mn::log_debug("framebuffer {} deleted", h->pass.fb);
 			glDeleteFramebuffers(1, &h->pass.fb);
 		}
 
@@ -1499,7 +1489,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
-		mn::log_debug("texture {} created", h->texture.id);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -1508,8 +1497,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->texture_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
-
-		mn::log_debug("texture {} deleted", h->texture.id);
 		glDeleteTextures(1, &h->texture.id);
 		for (int i = 0; i < 6; ++i)
 		{
@@ -1763,9 +1750,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0, color->texture.id, 0);
 				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
-				auto xoxo = glCheckNamedFramebufferStatus(self->msaa_resolve_fb, GL_FRAMEBUFFER);
-				assert(xoxo == GL_FRAMEBUFFER_COMPLETE);
-				assert(_renoir_gl450_check());
 			}
 			else
 			{
@@ -1780,7 +1764,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
 			}
 
-			assert(glCheckNamedFramebufferStatus(h->pass.fb, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 			glNamedFramebufferReadBuffer(h->pass.fb, GL_COLOR_ATTACHMENT0 + i);
 			glBlitNamedFramebuffer(
 				h->pass.fb,
@@ -1792,7 +1775,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			);
 			// clear color attachment
 			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0 + i, 0, 0);
-			assert(_renoir_gl450_check());
 		}
 		assert(_renoir_gl450_check());
 
