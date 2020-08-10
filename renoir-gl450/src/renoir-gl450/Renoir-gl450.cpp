@@ -908,6 +908,96 @@ struct Renoir_Command
 	};
 };
 
+struct Renoir_GL450_State
+{
+	// this is a copy from imgui
+	GLint last_viewport[4];
+	GLint last_scissor_box[4];
+	GLenum last_blend_src_rgb;
+	GLenum last_blend_dst_rgb;
+	GLenum last_blend_src_alpha;
+	GLenum last_blend_dst_alpha;
+	GLenum last_blend_equation_rgb;
+	GLenum last_blend_equation_alpha;
+	GLboolean last_enable_blend;
+	GLboolean last_enable_cull_face;
+	GLboolean last_enable_depth_test;
+	GLboolean last_enable_scissor_test;
+	GLint last_program;
+	GLint last_texture;
+	GLint last_sampler;
+	GLenum last_active_texture;
+	GLint last_polygon_mode[2];
+	GLint last_array_buffer;
+};
+
+inline static void
+_renoir_gl450_state_capture(Renoir_GL450_State& state)
+{
+	glGetIntegerv(GL_TEXTURE_BINDING_2D, &state.last_texture);
+	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &state.last_array_buffer);
+	glGetIntegerv(GL_ACTIVE_TEXTURE, (GLint *)&state.last_active_texture);
+	glActiveTexture(GL_TEXTURE0);
+	glGetIntegerv(GL_CURRENT_PROGRAM, &state.last_program);
+	glGetIntegerv(GL_VIEWPORT, state.last_viewport);
+	glGetIntegerv(GL_SCISSOR_BOX, state.last_scissor_box);
+	glGetIntegerv(GL_BLEND_SRC_RGB, (GLint *)&state.last_blend_src_rgb);
+	glGetIntegerv(GL_BLEND_DST_RGB, (GLint *)&state.last_blend_dst_rgb);
+	glGetIntegerv(GL_BLEND_SRC_ALPHA, (GLint *)&state.last_blend_src_alpha);
+	glGetIntegerv(GL_BLEND_DST_ALPHA, (GLint *)&state.last_blend_dst_alpha);
+	glGetIntegerv(GL_BLEND_EQUATION_RGB, (GLint *)&state.last_blend_equation_rgb);
+	glGetIntegerv(GL_BLEND_EQUATION_ALPHA, (GLint *)&state.last_blend_equation_alpha);
+	glGetIntegerv(GL_SAMPLER_BINDING, &state.last_sampler);
+	glGetIntegerv(GL_POLYGON_MODE, state.last_polygon_mode);
+	state.last_enable_blend		= glIsEnabled(GL_BLEND);
+	state.last_enable_cull_face	= glIsEnabled(GL_CULL_FACE);
+	state.last_enable_depth_test	= glIsEnabled(GL_DEPTH_TEST);
+	state.last_enable_scissor_test = glIsEnabled(GL_SCISSOR_TEST);
+}
+
+inline static void
+_renoir_gl450_state_reset(Renoir_GL450_State& state)
+{
+	glUseProgram(state.last_program);
+	glBindTexture(GL_TEXTURE_2D, state.last_texture);
+	glActiveTexture(state.last_active_texture);
+	glBindBuffer(GL_ARRAY_BUFFER, state.last_array_buffer);
+	glBlendEquationSeparate(state.last_blend_equation_rgb, state.last_blend_equation_alpha);
+	glBindSampler(0, state.last_sampler);
+	glPolygonMode(GL_FRONT_AND_BACK, (GLenum)state.last_polygon_mode[0]);
+	glBlendFuncSeparate(
+		state.last_blend_src_rgb,
+		state.last_blend_dst_rgb,
+		state.last_blend_src_alpha,
+		state.last_blend_dst_alpha);
+	if (state.last_enable_blend)
+		glEnable(GL_BLEND);
+	else
+		glDisable(GL_BLEND);
+	if (state.last_enable_cull_face)
+		glEnable(GL_CULL_FACE);
+	else
+		glDisable(GL_CULL_FACE);
+	if (state.last_enable_depth_test)
+		glEnable(GL_DEPTH_TEST);
+	else
+		glDisable(GL_DEPTH_TEST);
+	if (state.last_enable_scissor_test)
+		glEnable(GL_SCISSOR_TEST);
+	else
+		glDisable(GL_SCISSOR_TEST);
+	glViewport(
+		state.last_viewport[0],
+		state.last_viewport[1],
+		(GLsizei)state.last_viewport[2],
+		(GLsizei)state.last_viewport[3]);
+	glScissor(
+		state.last_scissor_box[0],
+		state.last_scissor_box[1],
+		(GLsizei)state.last_scissor_box[2],
+		(GLsizei)state.last_scissor_box[3]);
+}
+
 struct IRenoir
 {
 	mn::Mutex mtx;
@@ -928,6 +1018,10 @@ struct IRenoir
 	GLuint vao;
 	GLuint msaa_resolve_fb;
 	mn::Buf<Renoir_Handle*> sampler_cache;
+
+	// opengl state used to prevent state leaks in case of external opengl context
+	bool glewInited;
+	Renoir_GL450_State state;
 };
 
 static void
@@ -1113,7 +1207,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glGetIntegerv(GL_MINOR_VERSION, &minor);
 
 			mn::log_ensure(major >= 4 && minor >= 5, "incompatibile OpenGL Context");
+			_renoir_gl450_state_capture(self->state);
 		}
+		self->glewInited = true;
 		glCreateVertexArrays(1, &self->vao);
 		glCreateFramebuffers(1, &self->msaa_resolve_fb);
 		assert(_renoir_gl450_check());
@@ -2397,6 +2493,9 @@ _renoir_gl450_flush(Renoir* api, void*, void*)
 		mn::log_error("external opengl context has error {:#x}", error);
 	}
 
+	if (self->glewInited)
+		_renoir_gl450_state_capture(self->state);
+
 	// process commands
 	for(auto it = self->command_list_head; it != nullptr; it = it->next)
 	{
@@ -2405,6 +2504,8 @@ _renoir_gl450_flush(Renoir* api, void*, void*)
 	}
 
 	assert(_renoir_gl450_check());
+
+	_renoir_gl450_state_reset(self->state);
 
 	self->command_list_head = nullptr;
 	self->command_list_tail = nullptr;
