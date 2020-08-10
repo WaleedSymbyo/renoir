@@ -1139,6 +1139,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->pass_new.handle;
 		h->pass.swapchain = command->pass_new.swapchain;
+		assert(_renoir_gl450_check());
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
@@ -1152,12 +1153,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		int msaa = -1;
 		
 		glCreateFramebuffers(1, &h->pass.fb);
+		mn::log_debug("framebuffer {} created", h->pass.fb);
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 			assert(color->texture.render_target);
+
+			mn::log_debug("framebuffer {} color attachment[{}] = texture {}", h->pass.fb, i, color->texture.id);
 
 			_renoir_gl450_handle_ref(color);
 			if (color->texture.cube_map == false)
@@ -1212,11 +1216,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(msaa == color->texture.msaa);
 			}
 		}
+		assert(_renoir_gl450_check());
 
 		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		if (depth)
 		{
 			assert(depth->texture.render_target);
+
+			mn::log_debug("framebuffer {} depth attachment = texture {}", h->pass.fb, depth->texture.id);
+
 			_renoir_gl450_handle_ref(depth);
 			if (depth->texture.cube_map == false)
 			{
@@ -1270,6 +1278,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(msaa == depth->texture.msaa);
 			}
 		}
+		assert(_renoir_gl450_check());
 		assert(glCheckNamedFramebufferStatus(h->pass.fb, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 		h->pass.width = width;
 		h->pass.height = height;
@@ -1293,22 +1302,25 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				if (color == nullptr)
 					continue;
 				
+				mn::log_debug("framebuffer {} color detachment[{}] = texture {}", h->pass.fb, i, color->texture.id);
 				// issue command to free the color texture
 				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 				command->texture_free.handle = color;
-				_renoir_gl450_command_execute(self, command);
-				_renoir_gl450_command_free(self, command);
+				_renoir_gl450_command_process(self, command);
 			}
 
 			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
 			if (depth)
 			{
 				// issue command to free the depth texture
+				mn::log_debug("framebuffer {} depth detachment = texture {}", h->pass.fb, depth->texture.id);
 				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 				command->texture_free.handle = depth;
-				_renoir_gl450_command_execute(self, command);
-				_renoir_gl450_command_free(self, command);
+				_renoir_gl450_command_process(self, command);
 			}
+
+			mn::log_debug("framebuffer {} deleted", h->pass.fb);
+			glDeleteFramebuffers(1, &h->pass.fb);
 		}
 
 		_renoir_gl450_handle_free(self, h);
@@ -1487,6 +1499,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
+		mn::log_debug("texture {} created", h->texture.id);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -1495,6 +1508,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->texture_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
+
+		mn::log_debug("texture {} deleted", h->texture.id);
 		glDeleteTextures(1, &h->texture.id);
 		for (int i = 0; i < 6; ++i)
 		{
@@ -1748,6 +1763,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0, color->texture.id, 0);
 				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+				auto xoxo = glCheckNamedFramebufferStatus(self->msaa_resolve_fb, GL_FRAMEBUFFER);
+				assert(xoxo == GL_FRAMEBUFFER_COMPLETE);
+				assert(_renoir_gl450_check());
 			}
 			else
 			{
@@ -1762,6 +1780,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
 			}
 
+			assert(glCheckNamedFramebufferStatus(h->pass.fb, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
 			glNamedFramebufferReadBuffer(h->pass.fb, GL_COLOR_ATTACHMENT0 + i);
 			glBlitNamedFramebuffer(
 				h->pass.fb,
@@ -1771,6 +1790,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				GL_COLOR_BUFFER_BIT,
 				GL_LINEAR
 			);
+			// clear color attachment
+			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0 + i, 0, 0);
+			assert(_renoir_gl450_check());
 		}
 		assert(_renoir_gl450_check());
 
@@ -1801,6 +1823,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
 				GL_NEAREST
 			);
+			// clear depth attachment
+			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0);
 		}
 		assert(_renoir_gl450_check());
 		break;
@@ -1897,11 +1921,13 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->use_program.program;
 		self->current_program = h;
 		glUseProgram(self->current_program->program.id);
+		assert(_renoir_gl450_check());
 		break;
 	}
 	case RENOIR_COMMAND_KIND_SCISSOR:
 	{
 		glScissor(command->scissor.x, command->scissor.y, command->scissor.w, command->scissor.h);
+		assert(_renoir_gl450_check());
 		break;
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_WRITE:
@@ -2384,12 +2410,19 @@ _renoir_gl450_flush(Renoir* api, void*, void*)
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
+	if (auto error = glGetError(); error != GL_NO_ERROR)
+	{
+		mn::log_error("external opengl context has error {:#x}", error);
+	}
+
 	// process commands
 	for(auto it = self->command_list_head; it != nullptr; it = it->next)
 	{
 		_renoir_gl450_command_execute(self, it);
 		_renoir_gl450_command_free(self, it);
 	}
+
+	assert(_renoir_gl450_check());
 
 	self->command_list_head = nullptr;
 	self->command_list_tail = nullptr;
