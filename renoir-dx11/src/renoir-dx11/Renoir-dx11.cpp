@@ -56,19 +56,6 @@ _renoir_access_to_dx(RENOIR_ACCESS access)
 	}
 }
 
-inline static int
-_renoir_access_to_dx_buffer_access(RENOIR_ACCESS access)
-{
-	switch(access)
-	{
-	case RENOIR_ACCESS_NONE: return 0;
-	case RENOIR_ACCESS_READ: return D3D11_CPU_ACCESS_READ;
-	case RENOIR_ACCESS_WRITE: return D3D11_CPU_ACCESS_WRITE;
-	case RENOIR_ACCESS_READ_WRITE: return D3D11_CPU_ACCESS_WRITE;
-	default: assert(false && "unreachable"); return 0;
-	}
-}
-
 inline static DXGI_FORMAT
 _renoir_pixelformat_to_dx(RENOIR_PIXELFORMAT format)
 {
@@ -1251,14 +1238,18 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		h->buffer.size = desc.data_size;
 
 		auto dx_buffer_type = _renoir_buffer_type_to_dx(desc.type);
-		auto dx_usage = _renoir_usage_to_dx(desc.usage);
-		auto dx_access = _renoir_access_to_dx_buffer_access(desc.access);
 
 		D3D11_BUFFER_DESC buffer_desc{};
 		buffer_desc.ByteWidth = desc.data_size;
 		buffer_desc.BindFlags = dx_buffer_type;
-		buffer_desc.Usage = dx_usage;
-		buffer_desc.CPUAccessFlags = dx_access;
+		if (desc.usage == RENOIR_USAGE_STATIC)
+		{
+			buffer_desc.Usage = D3D11_USAGE_IMMUTABLE;
+		}
+		else
+		{
+			buffer_desc.Usage = D3D11_USAGE_DEFAULT;
+		}
 		
 		if (desc.type == RENOIR_BUFFER_COMPUTE)
 		{
@@ -1284,12 +1275,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			assert(SUCCEEDED(res));
 		}
 
-		if (desc.usage == RENOIR_USAGE_DYNAMIC && (desc.access == RENOIR_ACCESS_WRITE || desc.access == RENOIR_ACCESS_READ_WRITE))
+		if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 		{
 			auto buffer_staging_desc = buffer_desc;
+			buffer_staging_desc.BindFlags = 0;
 			buffer_staging_desc.Usage = D3D11_USAGE_STAGING;
 			buffer_staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
-			auto res = self->device->CreateBuffer(&buffer_desc, nullptr, &h->buffer.buffer_staging);
+			auto res = self->device->CreateBuffer(&buffer_staging_desc, nullptr, &h->buffer.buffer_staging);
 			assert(SUCCEEDED(res));
 		}
 		break;
@@ -1975,48 +1967,33 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->buffer_write.handle;
 
-		// total buffer update
-		if (command->buffer_write.offset == 0 && command->buffer_write.bytes_size == h->buffer.size)
-		{
-			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto res = self->context->Map(h->buffer.buffer, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_resource);
-			assert(SUCCEEDED(res));
-			::memcpy(
-				(char*)mapped_resource.pData + command->buffer_write.offset,
-				command->buffer_write.bytes,
-				command->buffer_write.bytes_size
-			);
-			self->context->Unmap(h->buffer.buffer, 0);
-		}
-		// partial buffer update
-		else
-		{
-			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto res = self->context->Map(h->buffer.buffer_staging, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_resource);
-			assert(SUCCEEDED(res));
-			::memcpy(
-				(char*)mapped_resource.pData + command->buffer_write.offset,
-				command->buffer_write.bytes,
-				command->buffer_write.bytes_size
-			);
-			self->context->Unmap(h->buffer.buffer_staging, 0);
+		assert(h->buffer.access == RENOIR_ACCESS_WRITE || h->buffer.access == RENOIR_ACCESS_READ_WRITE);
 
-			D3D11_BOX src_box{};
-			src_box.left = command->buffer_write.offset;
-			src_box.right = command->buffer_write.offset + command->buffer_write.bytes_size;
-			src_box.bottom = 1;
-			src_box.back = 1;
-			self->context->CopySubresourceRegion(
-				h->buffer.buffer,
-				0,
-				command->buffer_write.offset,
-				0,
-				0,
-				h->buffer.buffer_staging,
-				0,
-				&src_box
-			);
-		}
+		D3D11_MAPPED_SUBRESOURCE mapped_resource{};
+		auto res = self->context->Map(h->buffer.buffer_staging, 0, D3D11_MAP_WRITE, 0, &mapped_resource);
+		assert(SUCCEEDED(res));
+		::memcpy(
+			(char*)mapped_resource.pData + command->buffer_write.offset,
+			command->buffer_write.bytes,
+			command->buffer_write.bytes_size
+		);
+		self->context->Unmap(h->buffer.buffer_staging, 0);
+
+		D3D11_BOX src_box{};
+		src_box.left = command->buffer_write.offset;
+		src_box.right = command->buffer_write.offset + command->buffer_write.bytes_size;
+		src_box.bottom = 1;
+		src_box.back = 1;
+		self->context->CopySubresourceRegion(
+			h->buffer.buffer,
+			0,
+			command->buffer_write.offset,
+			0,
+			0,
+			h->buffer.buffer_staging,
+			0,
+			&src_box
+		);
 		break;
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_WRITE:
@@ -2152,13 +2129,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->buffer_read.handle;
 
 		D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-		self->context->Map(h->buffer.buffer, 0, D3D11_MAP_READ, 0, &mapped_resource);
+		self->context->Map(h->buffer.buffer_staging, 0, D3D11_MAP_READ, 0, &mapped_resource);
 		::memcpy(
 			command->buffer_read.bytes,
 			(char*)mapped_resource.pData + command->buffer_read.offset,
 			command->buffer_read.bytes_size
 		);
-		self->context->Unmap(h->buffer.buffer, 0);
+		self->context->Unmap(h->buffer.buffer_staging, 0);
 		break;
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
