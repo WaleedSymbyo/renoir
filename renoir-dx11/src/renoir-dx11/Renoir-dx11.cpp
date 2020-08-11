@@ -262,13 +262,22 @@ _renoir_msaa_to_dx(RENOIR_MSAA_MODE msaa)
 	}
 }
 
+struct Renoir_Handle;
+
+struct Renoir_Compute_Write_Slot
+{
+	Renoir_Handle* resource;
+	int slot;
+};
+
 struct Renoir_Command;
 
 enum RENOIR_HANDLE_KIND
 {
 	RENOIR_HANDLE_KIND_NONE,
 	RENOIR_HANDLE_KIND_SWAPCHAIN,
-	RENOIR_HANDLE_KIND_PASS,
+	RENOIR_HANDLE_KIND_RASTER_PASS,
+	RENOIR_HANDLE_KIND_COMPUTE_PASS,
 	RENOIR_HANDLE_KIND_BUFFER,
 	RENOIR_HANDLE_KIND_TEXTURE,
 	RENOIR_HANDLE_KIND_SAMPLER,
@@ -305,8 +314,16 @@ struct Renoir_Handle
 			ID3D11DepthStencilView* depth_stencil_view;
 			int width, height;
 			Renoir_Pass_Offscreen_Desc offscreen;
-		} pass;
-		
+		} raster_pass;
+
+		struct
+		{
+			Renoir_Command *command_list_head;
+			Renoir_Command *command_list_tail;
+			// can be buffers or textures
+			mn::Buf<Renoir_Compute_Write_Slot> write_resources;
+		} compute_pass;
+
 		struct
 		{
 			ID3D11Buffer* buffer;
@@ -315,6 +332,8 @@ struct Renoir_Handle
 			RENOIR_ACCESS access;
 			size_t size;
 			ID3D11Buffer* buffer_staging;
+			ID3D11ShaderResourceView* srv;
+			ID3D11UnorderedAccessView* uav;
 		} buffer;
 
 		struct
@@ -324,6 +343,7 @@ struct Renoir_Handle
 			ID3D11Texture2D* texture2d;
 			ID3D11Texture3D* texture3d;
 			ID3D11ShaderResourceView* shader_view;
+			ID3D11UnorderedAccessView* uav;
 			Renoir_Size size;
 			RENOIR_USAGE usage;
 			RENOIR_ACCESS access;
@@ -379,6 +399,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_SWAPCHAIN_RESIZE,
 	RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW,
 	RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW,
+	RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW,
 	RENOIR_COMMAND_KIND_PASS_FREE,
 	RENOIR_COMMAND_KIND_BUFFER_NEW,
 	RENOIR_COMMAND_KIND_BUFFER_FREE,
@@ -446,6 +467,11 @@ struct Renoir_Command
 			Renoir_Handle* handle;
 			Renoir_Pass_Offscreen_Desc desc;
 		} pass_offscreen_new;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} pass_compute_new;
 
 		struct
 		{
@@ -590,6 +616,7 @@ struct Renoir_Command
 			Renoir_Handle* handle;
 			RENOIR_SHADER shader;
 			int slot;
+			RENOIR_ACCESS gpu_access;
 		} buffer_bind;
 
 		struct
@@ -598,6 +625,7 @@ struct Renoir_Command
 			RENOIR_SHADER shader;
 			int slot;
 			Renoir_Handle* sampler;
+			RENOIR_ACCESS gpu_access;
 		} texture_bind;
 
 		struct
@@ -741,6 +769,7 @@ _renoir_dx11_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_SWAPCHAIN_RESIZE:
 	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
 	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
+	case RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW:
 	case RENOIR_COMMAND_KIND_PASS_FREE:
 	case RENOIR_COMMAND_KIND_BUFFER_FREE:
 	case RENOIR_COMMAND_KIND_TEXTURE_FREE:
@@ -1026,14 +1055,14 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
 	{
 		auto h = command->pass_new.handle;
-		h->pass.swapchain = command->pass_new.swapchain;
+		h->raster_pass.swapchain = command->pass_new.swapchain;
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW:
 	{
 		auto h = command->pass_offscreen_new.handle;
 		auto &desc = command->pass_offscreen_new.desc;
-		h->pass.offscreen = desc;
+		h->raster_pass.offscreen = desc;
 
 		int width = -1;
 		int height = -1;
@@ -1051,12 +1080,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, nullptr, &h->pass.render_target_view[i]);
+					auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, nullptr, &h->raster_pass.render_target_view[i]);
 					assert(SUCCEEDED(res));
 				}
 				else
 				{
-					auto res = self->device->CreateRenderTargetView(color->texture.texture2d, nullptr, &h->pass.render_target_view[i]);
+					auto res = self->device->CreateRenderTargetView(color->texture.texture2d, nullptr, &h->raster_pass.render_target_view[i]);
 					assert(SUCCEEDED(res));
 				}
 			}
@@ -1071,7 +1100,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					render_target_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DMSARRAY;
 					render_target_desc.Texture2DMSArray.FirstArraySlice = desc.color[i].subresource;
 					render_target_desc.Texture2DMSArray.ArraySize = 1;
-					auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, &render_target_desc, &h->pass.render_target_view[i]);
+					auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, &render_target_desc, &h->raster_pass.render_target_view[i]);
 					assert(SUCCEEDED(res));
 				}
 				else
@@ -1081,7 +1110,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					render_target_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
 					render_target_desc.Texture2DArray.FirstArraySlice = desc.color[i].subresource;
 					render_target_desc.Texture2DArray.ArraySize = 1;
-					auto res = self->device->CreateRenderTargetView(color->texture.texture2d, &render_target_desc, &h->pass.render_target_view[i]);
+					auto res = self->device->CreateRenderTargetView(color->texture.texture2d, &render_target_desc, &h->raster_pass.render_target_view[i]);
 					assert(SUCCEEDED(res));
 				}
 			}
@@ -1122,7 +1151,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
 					depth_view_desc.Format = dx_format;
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
-					auto res = self->device->CreateDepthStencilView(depth->texture.render_color_buffer, &depth_view_desc, &h->pass.depth_stencil_view);
+					auto res = self->device->CreateDepthStencilView(depth->texture.render_color_buffer, &depth_view_desc, &h->raster_pass.depth_stencil_view);
 					assert(SUCCEEDED(res));
 				}
 				else
@@ -1131,7 +1160,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
 					depth_view_desc.Format = dx_format;
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
-					auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->pass.depth_stencil_view);
+					auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->raster_pass.depth_stencil_view);
 					assert(SUCCEEDED(res));
 				}
 			}
@@ -1145,7 +1174,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
 					depth_view_desc.Texture2DMSArray.FirstArraySlice = desc.depth_stencil.subresource;
 					depth_view_desc.Texture2DMSArray.ArraySize = 1;
-					auto res = self->device->CreateDepthStencilView(depth->texture.render_color_buffer, &depth_view_desc, &h->pass.depth_stencil_view);
+					auto res = self->device->CreateDepthStencilView(depth->texture.render_color_buffer, &depth_view_desc, &h->raster_pass.depth_stencil_view);
 					assert(SUCCEEDED(res));
 				}
 				else
@@ -1156,7 +1185,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
 					depth_view_desc.Texture2DArray.FirstArraySlice = desc.depth_stencil.subresource;
 					depth_view_desc.Texture2DArray.ArraySize = 1;
-					auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->pass.depth_stencil_view);
+					auto res = self->device->CreateDepthStencilView(depth->texture.texture2d, &depth_view_desc, &h->raster_pass.depth_stencil_view);
 					assert(SUCCEEDED(res));
 				}
 			}
@@ -1182,8 +1211,15 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(msaa == depth->texture.msaa);
 			}
 		}
-		h->pass.width = width;
-		h->pass.height = height;
+		h->raster_pass.width = width;
+		h->raster_pass.height = height;
+		break;
+	}
+	case RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW:
+	{
+		// do nothing
+		auto h = command->pass_compute_new.handle;
+		h->compute_pass.write_resources = mn::buf_new<Renoir_Compute_Write_Slot>();
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_FREE:
@@ -1192,36 +1228,46 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		if (_renoir_dx11_handle_unref(h) == false)
 			break;
 		
-		for(auto it = h->pass.command_list_head; it != NULL; it = it->next)
-			_renoir_dx11_command_free(self, command);
-		
-		// free all the bound textures if it's a framebuffer pass
-		if (h->pass.swapchain == nullptr)
+		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
-			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
-			{
-				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
-				if (color == nullptr)
-					continue;
-				
-				h->pass.render_target_view[0]->Release();
-				// issue command to free the color texture
-				auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
-				command->texture_free.handle = color;
-				_renoir_dx11_command_execute(self, command);
+			for(auto it = h->raster_pass.command_list_head; it != NULL; it = it->next)
 				_renoir_dx11_command_free(self, command);
-			}
+			
+			// free all the bound textures if it's a framebuffer pass
+			if (h->raster_pass.swapchain == nullptr)
+			{
+				for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+				{
+					auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
+					if (color == nullptr)
+						continue;
+					
+					h->raster_pass.render_target_view[0]->Release();
+					// issue command to free the color texture
+					auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+					command->texture_free.handle = color;
+					_renoir_dx11_command_execute(self, command);
+					_renoir_dx11_command_free(self, command);
+				}
 
-			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
-			if (depth)
-			{
-				h->pass.depth_stencil_view->Release();
-				// issue command to free the depth texture
-				auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
-				command->texture_free.handle = depth;
-				_renoir_dx11_command_execute(self, command);
-				_renoir_dx11_command_free(self, command);
+				auto depth = (Renoir_Handle*)h->raster_pass.offscreen.depth_stencil.texture.handle;
+				if (depth)
+				{
+					h->raster_pass.depth_stencil_view->Release();
+					// issue command to free the depth texture
+					auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+					command->texture_free.handle = depth;
+					_renoir_dx11_command_execute(self, command);
+					_renoir_dx11_command_free(self, command);
+				}
 			}
+		}
+		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+		{
+			for(auto it = h->compute_pass.command_list_head; it != NULL; it = it->next)
+				_renoir_dx11_command_free(self, command);
+			
+			mn::buf_free(h->compute_pass.write_resources);
 		}
 
 		_renoir_dx11_handle_free(self, h);
@@ -1275,6 +1321,23 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			assert(SUCCEEDED(res));
 		}
 
+		if (desc.type == RENOIR_BUFFER_COMPUTE)
+		{
+			D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc{};
+			srv_desc.ViewDimension = D3D11_SRV_DIMENSION_BUFFEREX;
+			srv_desc.Format = DXGI_FORMAT_UNKNOWN;
+			srv_desc.BufferEx.NumElements = buffer_desc.ByteWidth / buffer_desc.StructureByteStride;
+			auto res = self->device->CreateShaderResourceView(h->buffer.buffer, &srv_desc, &h->buffer.srv);
+			assert(SUCCEEDED(res));
+
+			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_BUFFER;
+			uav_desc.Format = DXGI_FORMAT_UNKNOWN;
+			uav_desc.Buffer.NumElements = buffer_desc.ByteWidth / buffer_desc.StructureByteStride;
+			res = self->device->CreateUnorderedAccessView(h->buffer.buffer, &uav_desc, &h->buffer.uav);
+			assert(SUCCEEDED(res));
+		}
+
 		if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 		{
 			auto buffer_staging_desc = buffer_desc;
@@ -1293,6 +1356,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			break;
 		h->buffer.buffer->Release();
 		if (h->buffer.buffer_staging) h->buffer.buffer_staging->Release();
+		if (h->buffer.srv) h->buffer.srv->Release();
+		if (h->buffer.uav) h->buffer.uav->Release();
 		_renoir_dx11_handle_free(self, h);
 		break;
 	}
@@ -1322,11 +1387,11 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			D3D11_TEXTURE1D_DESC texture_desc{};
 			texture_desc.ArraySize = 1;
-			texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 			texture_desc.MipLevels = h->texture.mipmaps ? 0 : 1;
 			texture_desc.Width = desc.size.width;
 			texture_desc.CPUAccessFlags = dx_access;
-			texture_desc.Usage = dx_usage;
+			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 
 			if (desc.data[0])
@@ -1350,7 +1415,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto res = self->device->CreateShaderResourceView(h->texture.texture1d, &view_desc, &h->texture.shader_view);
 			assert(SUCCEEDED(res));
 
-			if (desc.usage == RENOIR_USAGE_DYNAMIC && (desc.access == RENOIR_ACCESS_WRITE || desc.access == RENOIR_ACCESS_READ_WRITE))
+			if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 			{
 				auto texture_staging_desc = texture_desc;
 				texture_desc.Usage = D3D11_USAGE_STAGING;
@@ -1358,6 +1423,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				res = self->device->CreateTexture1D(&texture_staging_desc, nullptr, &h->texture.texture1d_staging);
 				assert(SUCCEEDED(res));
 			}
+
+			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+			uav_desc.Format = dx_pixelformat;
+			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1D;
+			res = self->device->CreateUnorderedAccessView(h->texture.texture1d, &uav_desc, &h->texture.uav);
+			assert(SUCCEEDED(res));
 
 			if (desc.data[0] && h->texture.mipmaps)
 				self->context->GenerateMips(h->texture.shader_view);
@@ -1369,19 +1440,19 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			if (h->texture.render_target)
 			{
 				if (_renoir_pixelformat_is_depth(desc.pixel_format) == false)
-					texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+					texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 				else
-					texture_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
+					texture_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 			}
 			else
 			{
-				texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+				texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 			}
 			texture_desc.MipLevels = h->texture.mipmaps ? 0 : 1;
 			texture_desc.Width = desc.size.width;
 			texture_desc.Height = desc.size.height;
 			texture_desc.CPUAccessFlags = dx_access;
-			texture_desc.Usage = h->texture.render_target ? D3D11_USAGE_DEFAULT : dx_usage;
+			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 			texture_desc.SampleDesc.Count = 1;
 
@@ -1428,6 +1499,15 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto res = self->device->CreateShaderResourceView(h->texture.texture2d, &view_desc, &h->texture.shader_view);
 			assert(SUCCEEDED(res));
 
+			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+			uav_desc.Format = dx_pixelformat;
+			if (h->texture.cube_map == false)
+				uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+			else
+				uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+			res = self->device->CreateUnorderedAccessView(h->texture.texture2d, &uav_desc, &h->texture.uav);
+			assert(SUCCEEDED(res));
+
 			if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
 			{
 				auto dx_msaa = _renoir_msaa_to_dx(desc.msaa);
@@ -1450,7 +1530,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(SUCCEEDED(res));
 			}
 
-			if (desc.usage == RENOIR_USAGE_DYNAMIC && (desc.access == RENOIR_ACCESS_WRITE || desc.access == RENOIR_ACCESS_READ_WRITE))
+			if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 			{
 				auto texture_staging_desc = texture_desc;
 				texture_desc.Usage = D3D11_USAGE_STAGING;
@@ -1465,13 +1545,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		else if (desc.size.height > 0 && desc.size.depth > 0)
 		{
 			D3D11_TEXTURE3D_DESC texture_desc{};
-			texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+			texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 			texture_desc.MipLevels = h->texture.mipmaps ? 0 : 1;
 			texture_desc.Width = desc.size.width;
 			texture_desc.Height = desc.size.height;
 			texture_desc.Depth = desc.size.depth;
 			texture_desc.CPUAccessFlags = dx_access;
-			texture_desc.Usage = dx_usage;
+			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 
 			if (desc.data[0])
@@ -1496,7 +1576,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto res = self->device->CreateShaderResourceView(h->texture.texture3d, &view_desc, &h->texture.shader_view);
 			assert(SUCCEEDED(res));
 
-			if (desc.usage == RENOIR_USAGE_DYNAMIC && (desc.access == RENOIR_ACCESS_WRITE || desc.access == RENOIR_ACCESS_READ_WRITE))
+			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+			uav_desc.Format = dx_pixelformat;
+			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+			res = self->device->CreateUnorderedAccessView(h->texture.texture3d, &uav_desc, &h->texture.uav);
+			assert(SUCCEEDED(res));
+
+			if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 			{
 				auto texture_staging_desc = texture_desc;
 				texture_desc.Usage = D3D11_USAGE_STAGING;
@@ -1519,6 +1605,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		if (h->texture.texture2d) h->texture.texture2d->Release();
 		if (h->texture.texture3d) h->texture.texture3d->Release();
 		if (h->texture.shader_view) h->texture.shader_view->Release();
+		if (h->texture.uav) h->texture.uav->Release();
 		if (h->texture.texture1d_staging) h->texture.texture1d_staging->Release();
 		if (h->texture.texture2d_staging) h->texture.texture2d_staging->Release();
 		if (h->texture.texture3d_staging) h->texture.texture3d_staging->Release();
@@ -1806,83 +1893,218 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 		self->current_pass = h;
 
-		// if this is an on screen/window
-		if (auto swapchain = h->pass.swapchain)
+		if (self->current_pass->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
-			self->context->OMSetRenderTargets(1, &swapchain->swapchain.render_target_view, swapchain->swapchain.depth_stencil_view);
-			D3D11_VIEWPORT viewport{};
-			viewport.Width = swapchain->swapchain.width;
-			viewport.Height = swapchain->swapchain.height;
-			viewport.MinDepth = 0.0f;
-			viewport.MaxDepth = 1.0f;
-			viewport.TopLeftX = 0.0f;
-			viewport.TopLeftY = 0.0f;
-			self->context->RSSetViewports(1, &viewport);
-			D3D11_RECT scissor{};
-			scissor.left = 0;
-			scissor.right = viewport.Width;
-			scissor.top = 0;
-			scissor.bottom = viewport.Height;
-			self->context->RSSetScissorRects(1, &scissor);
+			// if this is an on screen/window
+			if (auto swapchain = h->raster_pass.swapchain)
+			{
+				self->context->OMSetRenderTargets(1, &swapchain->swapchain.render_target_view, swapchain->swapchain.depth_stencil_view);
+				D3D11_VIEWPORT viewport{};
+				viewport.Width = swapchain->swapchain.width;
+				viewport.Height = swapchain->swapchain.height;
+				viewport.MinDepth = 0.0f;
+				viewport.MaxDepth = 1.0f;
+				viewport.TopLeftX = 0.0f;
+				viewport.TopLeftY = 0.0f;
+				self->context->RSSetViewports(1, &viewport);
+				D3D11_RECT scissor{};
+				scissor.left = 0;
+				scissor.right = viewport.Width;
+				scissor.top = 0;
+				scissor.bottom = viewport.Height;
+				self->context->RSSetScissorRects(1, &scissor);
+			}
+			// this is an off screen
+			else
+			{
+				self->context->OMSetRenderTargets(RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE, h->raster_pass.render_target_view, h->raster_pass.depth_stencil_view);
+				D3D11_VIEWPORT viewport{};
+				viewport.Width = h->raster_pass.width;
+				viewport.Height = h->raster_pass.height;
+				viewport.MinDepth = 0.0f;
+				viewport.MaxDepth = 1.0f;
+				viewport.TopLeftX = 0.0f;
+				viewport.TopLeftY = 0.0f;
+				self->context->RSSetViewports(1, &viewport);
+				D3D11_RECT scissor{};
+				scissor.left = 0;
+				scissor.right = viewport.Width;
+				scissor.top = 0;
+				scissor.bottom = viewport.Height;
+				self->context->RSSetScissorRects(1, &scissor);
+			}
 		}
-		// this is an off screen
+		else if (self->current_pass->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+		{
+			mn::buf_clear(self->current_pass->compute_pass.write_resources);
+		}
 		else
 		{
-			self->context->OMSetRenderTargets(RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE, h->pass.render_target_view, h->pass.depth_stencil_view);
-			D3D11_VIEWPORT viewport{};
-			viewport.Width = h->pass.width;
-			viewport.Height = h->pass.height;
-			viewport.MinDepth = 0.0f;
-			viewport.MaxDepth = 1.0f;
-			viewport.TopLeftX = 0.0f;
-			viewport.TopLeftY = 0.0f;
-			self->context->RSSetViewports(1, &viewport);
-			D3D11_RECT scissor{};
-			scissor.left = 0;
-			scissor.right = viewport.Width;
-			scissor.top = 0;
-			scissor.bottom = viewport.Height;
-			self->context->RSSetScissorRects(1, &scissor);
+			assert(false && "invalid pass");
 		}
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_END:
 	{
 		auto h = command->pass_end.handle;
-		// if this is an off screen view with msaa we'll need to issue a read command to move the data
-		// from renderbuffer to the texture
-		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
-			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
-			if (color == nullptr)
-				continue;
+			// if this is an off screen view with msaa we'll need to issue a read command to move the data
+			// from renderbuffer to the texture
+			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+			{
+				auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
+				if (color == nullptr)
+					continue;
 
-			// only resolve msaa textures
-			if (color->texture.msaa == RENOIR_MSAA_MODE_NONE)
-				continue;
+				// only resolve msaa textures
+				if (color->texture.msaa == RENOIR_MSAA_MODE_NONE)
+					continue;
 
-			auto dx_pixel_format = _renoir_pixelformat_to_dx(color->texture.pixel_format);
-			self->context->ResolveSubresource(
-				color->texture.texture2d,
-				h->pass.offscreen.color[i].subresource,
-				color->texture.render_color_buffer,
-				h->pass.offscreen.color[i].subresource,
-				dx_pixel_format
-			);
+				auto dx_pixel_format = _renoir_pixelformat_to_dx(color->texture.pixel_format);
+				self->context->ResolveSubresource(
+					color->texture.texture2d,
+					h->raster_pass.offscreen.color[i].subresource,
+					color->texture.render_color_buffer,
+					h->raster_pass.offscreen.color[i].subresource,
+					dx_pixel_format
+				);
+			}
+
+			// resolve depth textures as well
+			auto depth = (Renoir_Handle*)h->raster_pass.offscreen.depth_stencil.texture.handle;
+			if (depth && depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			{
+				auto dx_pixel_format = _renoir_pixelformat_to_dx(depth->texture.pixel_format);
+				self->context->ResolveSubresource(
+					depth->texture.texture2d,
+					h->raster_pass.offscreen.depth_stencil.subresource,
+					depth->texture.render_color_buffer,
+					h->raster_pass.offscreen.depth_stencil.subresource,
+					dx_pixel_format
+				);
+			}
 		}
-
-		// resolve depth textures as well
-		auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
-		if (depth && depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
 		{
-			auto dx_pixel_format = _renoir_pixelformat_to_dx(depth->texture.pixel_format);
-			self->context->ResolveSubresource(
-				depth->texture.texture2d,
-				h->pass.offscreen.depth_stencil.subresource,
-				depth->texture.render_color_buffer,
-				h->pass.offscreen.depth_stencil.subresource,
-				dx_pixel_format
-			);
+			// schedule buffer copy here
+			for (auto [hres, slot]: h->compute_pass.write_resources)
+			{
+				if (hres->kind == RENOIR_HANDLE_KIND_BUFFER)
+				{
+					D3D11_BOX src_box{};
+					src_box.left = 0;
+					src_box.right = hres->buffer.size;
+					src_box.bottom = 1;
+					src_box.back = 1;
+					self->context->CopySubresourceRegion(
+						hres->buffer.buffer_staging,
+						0,
+						0,
+						0,
+						0,
+						hres->buffer.buffer,
+						0,
+						&src_box
+					);
+				}
+				else if (hres->kind == RENOIR_HANDLE_KIND_TEXTURE)
+				{
+					if (hres->texture.texture1d)
+					{
+						D3D11_BOX src_box{};
+						src_box.left = 0;
+						src_box.right = hres->texture.size.width;
+						src_box.bottom = 1;
+						src_box.back = 1;
+						self->context->CopySubresourceRegion(
+							hres->texture.texture1d_staging,
+							0,
+							0,
+							0,
+							0,
+							hres->texture.texture1d,
+							0,
+							&src_box
+						);
+					}
+					else if (hres->texture.texture2d)
+					{
+						if (hres->texture.cube_map == false)
+						{
+							D3D11_BOX src_box{};
+							src_box.left = 0;
+							src_box.right = hres->texture.size.width;
+							src_box.top = 0;
+							src_box.bottom = hres->texture.size.height;
+							src_box.back = 1;
+							self->context->CopySubresourceRegion(
+								hres->texture.texture2d_staging,
+								0,
+								0,
+								0,
+								0,
+								hres->texture.texture2d,
+								0,
+								&src_box
+							);
+						}
+						else
+						{
+							for (int i = 0; i < 6; ++i)
+							{
+								D3D11_BOX src_box{};
+								src_box.left = 0;
+								src_box.right = hres->texture.size.width;
+								src_box.top = 0;
+								src_box.bottom = hres->texture.size.height;
+								src_box.back = 1;
+								self->context->CopySubresourceRegion(
+									hres->texture.texture2d_staging,
+									i,
+									0,
+									0,
+									0,
+									hres->texture.texture2d,
+									i,
+									&src_box
+								);
+							}
+						}
+					}
+					else if (hres->texture.texture3d)
+					{
+						D3D11_BOX src_box{};
+						src_box.left = 0;
+						src_box.right = hres->texture.size.width;
+						src_box.top = 0;
+						src_box.bottom = hres->texture.size.height;
+						src_box.front = 0;
+						src_box.back = hres->texture.size.depth;
+						self->context->CopySubresourceRegion(
+							h->texture.texture3d_staging,
+							0,
+							0,
+							0,
+							0,
+							h->texture.texture3d,
+							0,
+							&src_box
+						);
+					}
+				}
+				else
+				{
+					assert(false && "invalid resource");
+				}
+				// clear compute shader write slot
+				ID3D11UnorderedAccessView* uav[1] = { nullptr };
+				self->context->CSSetUnorderedAccessViews(slot, 1, uav, nullptr);
+			}
+		}
+		else
+		{
+			assert(false && "invalid pass");
 		}
 		break;
 	}
@@ -1890,9 +2112,11 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto& desc = command->pass_clear.desc;
 
+		assert(self->current_pass->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 		if (desc.flags & RENOIR_CLEAR_COLOR)
 		{
-			if (auto swapchain = self->current_pass->pass.swapchain)
+			if (auto swapchain = self->current_pass->raster_pass.swapchain)
 			{
 				self->context->ClearRenderTargetView(swapchain->swapchain.render_target_view, &desc.color.r);
 			}
@@ -1900,7 +2124,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 				{
-					auto render_target = self->current_pass->pass.render_target_view[i];
+					auto render_target = self->current_pass->raster_pass.render_target_view[i];
 					if (render_target == nullptr)
 						continue;
 					self->context->ClearRenderTargetView(render_target, &desc.color.r);
@@ -1910,13 +2134,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 		if (desc.flags & RENOIR_CLEAR_DEPTH)
 		{
-			if (auto swapchain = self->current_pass->pass.swapchain)
+			if (auto swapchain = self->current_pass->raster_pass.swapchain)
 			{
 				self->context->ClearDepthStencilView(swapchain->swapchain.depth_stencil_view, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, desc.depth, desc.stencil);
 			}
 			else
 			{
-				auto depth_stencil = self->current_pass->pass.depth_stencil_view;
+				auto depth_stencil = self->current_pass->raster_pass.depth_stencil_view;
 				self->context->ClearDepthStencilView(depth_stencil, D3D11_CLEAR_DEPTH | D3D11_CLEAR_STENCIL, desc.depth, desc.stencil);
 			}
 		}
@@ -2148,13 +2372,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		if (h->texture.texture1d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			self->context->Map(h->texture.texture1d, 0, D3D11_MAP_READ, 0, &mapped_resource);
+			self->context->Map(h->texture.texture1d_staging, 0, D3D11_MAP_READ, 0, &mapped_resource);
 			::memcpy(
 				desc.bytes,
 				(char*)mapped_resource.pData + desc.x * dx_pixel_size,
 				desc.bytes_size
 			);
-			self->context->Unmap(h->texture.texture1d, 0);
+			self->context->Unmap(h->texture.texture1d_staging, 0);
 		}
 		else if (h->texture.texture2d)
 		{
@@ -2162,7 +2386,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				desc.z = 0;
 
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			self->context->Map(h->texture.texture2d, desc.z, D3D11_MAP_READ, 0, &mapped_resource);
+			self->context->Map(h->texture.texture2d_staging, desc.z, D3D11_MAP_READ, 0, &mapped_resource);
 
 			char* read_ptr = (char*)mapped_resource.pData;
 			read_ptr += mapped_resource.RowPitch * desc.y;
@@ -2177,12 +2401,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				read_ptr += mapped_resource.RowPitch;
 				write_ptr += desc.width * dx_pixel_size;
 			}
-			self->context->Unmap(h->texture.texture2d, desc.z);
+			self->context->Unmap(h->texture.texture2d_staging, desc.z);
 		}
 		else if (h->texture.texture3d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			self->context->Map(h->texture.texture3d, 0, D3D11_MAP_READ, 0, &mapped_resource);
+			self->context->Map(h->texture.texture3d_staging, 0, D3D11_MAP_READ, 0, &mapped_resource);
 
 			char* read_ptr = (char*)mapped_resource.pData;
 			read_ptr += mapped_resource.DepthPitch * desc.z + mapped_resource.RowPitch * desc.y;
@@ -2202,31 +2426,54 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 				read_ptr += mapped_resource.DepthPitch;
 			}
-			self->context->Unmap(h->texture.texture3d, 0);
+			self->context->Unmap(h->texture.texture3d_staging, 0);
 		}
 		break;
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
 	{
 		auto h = command->buffer_bind.handle;
-		assert(h->buffer.type == RENOIR_BUFFER_UNIFORM || h->buffer.type == RENOIR_BUFFER_COMPUTE);
-		switch(command->buffer_bind.shader)
+
+		if (h->buffer.type == RENOIR_BUFFER_UNIFORM)
 		{
-		case RENOIR_SHADER_VERTEX:
-			self->context->VSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
-			break;
-		case RENOIR_SHADER_PIXEL:
-			self->context->PSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
-			break;
-		case RENOIR_SHADER_GEOMETRY:
-			self->context->GSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
-			break;
-		case RENOIR_SHADER_COMPUTE:
-			self->context->CSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
-			break;
-		default:
-			assert(false && "unreachable");
-			break;
+			switch(command->buffer_bind.shader)
+			{
+			case RENOIR_SHADER_VERTEX:
+				self->context->VSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
+				break;
+			case RENOIR_SHADER_PIXEL:
+				self->context->PSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
+				break;
+			case RENOIR_SHADER_GEOMETRY:
+				self->context->GSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
+				break;
+			case RENOIR_SHADER_COMPUTE:
+				self->context->CSSetConstantBuffers(command->buffer_bind.slot, 1, &h->buffer.buffer);
+				break;
+			default:
+				assert(false && "unreachable");
+				break;
+			}
+		}
+		else if (h->buffer.type == RENOIR_BUFFER_COMPUTE)
+		{
+			if (command->buffer_bind.gpu_access == RENOIR_ACCESS_READ)
+			{
+				self->context->CSSetShaderResources(command->buffer_bind.slot, 1, &h->buffer.srv);
+			}
+			else if (command->buffer_bind.gpu_access == RENOIR_ACCESS_WRITE ||
+					 command->buffer_bind.gpu_access == RENOIR_ACCESS_READ_WRITE)
+			{
+				self->context->CSSetUnorderedAccessViews(command->buffer_bind.slot, 1, &h->buffer.uav, nullptr);
+				Renoir_Compute_Write_Slot write_slot{};
+				write_slot.resource = h;
+				write_slot.slot = command->buffer_bind.slot;
+				mn::buf_push(self->current_pass->compute_pass.write_resources, write_slot);
+			}
+		}
+		else
+		{
+			assert(false && "invalid buffer");
 		}
 		break;
 	}
@@ -2248,8 +2495,19 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			self->context->GSSetSamplers(command->texture_bind.slot, 1, &command->texture_bind.sampler->sampler.sampler);
 			break;
 		case RENOIR_SHADER_COMPUTE:
-			self->context->CSSetShaderResources(command->texture_bind.slot, 1, &h->texture.shader_view);
-			self->context->CSSetSamplers(command->texture_bind.slot, 1, &command->texture_bind.sampler->sampler.sampler);
+			if (command->texture_bind.gpu_access == RENOIR_ACCESS_READ)
+			{
+				self->context->CSSetShaderResources(command->texture_bind.slot, 1, &h->texture.shader_view);
+			}
+			else if (command->texture_bind.gpu_access == RENOIR_ACCESS_WRITE ||
+					 command->texture_bind.gpu_access == RENOIR_ACCESS_READ_WRITE)
+			{
+				self->context->CSSetUnorderedAccessViews(command->texture_bind.slot, 1, &h->texture.uav, nullptr);
+				Renoir_Compute_Write_Slot write_slot{};
+				write_slot.resource = h;
+				write_slot.slot = command->texture_bind.slot;
+				mn::buf_push(self->current_pass->compute_pass.write_resources, write_slot);
+			}
 			break;
 		default:
 			assert(false && "unreachable");
@@ -3028,7 +3286,7 @@ _renoir_dx11_pass_swapchain_new(Renoir* api, Renoir_Swapchain swapchain)
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_PASS);
+	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_RASTER_PASS);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW);
 	command->pass_new.handle = h;
 	command->pass_new.swapchain = (Renoir_Handle*)swapchain.handle;
@@ -3070,10 +3328,25 @@ _renoir_dx11_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_PASS);
+	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_RASTER_PASS);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW);
 	command->pass_offscreen_new.handle = h;
 	command->pass_offscreen_new.desc = desc;
+	_renoir_dx11_command_process(self, command);
+	return Renoir_Pass{h};
+}
+
+static Renoir_Pass
+_renoir_dx11_pass_compute_new(Renoir* api)
+{
+	auto self = api->ctx;
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_COMPUTE_PASS);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW);
+	command->pass_compute_new.handle = h;
 	_renoir_dx11_command_process(self, command);
 	return Renoir_Pass{h};
 }
@@ -3097,8 +3370,10 @@ _renoir_dx11_pass_size(Renoir* api, Renoir_Pass pass)
 {
 	Renoir_Size res{};
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	// if this is an on screen/window
-	if (auto swapchain = h->pass.swapchain)
+	if (auto swapchain = h->raster_pass.swapchain)
 	{
 		res.width = swapchain->swapchain.width;
 		res.height = swapchain->swapchain.height;
@@ -3106,8 +3381,8 @@ _renoir_dx11_pass_size(Renoir* api, Renoir_Pass pass)
 	// this is an off screen
 	else
 	{
-		res.width = h->pass.width;
-		res.height = h->pass.height;
+		res.width = h->raster_pass.width;
+		res.height = h->raster_pass.height;
 	}
 	return res;
 }
@@ -3118,15 +3393,34 @@ _renoir_dx11_pass_begin(Renoir* api, Renoir_Pass pass)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
-	h->pass.command_list_head = nullptr;
-	h->pass.command_list_tail = nullptr;
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		h->raster_pass.command_list_head = nullptr;
+		h->raster_pass.command_list_tail = nullptr;
 
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
+		mn::mutex_lock(self->mtx);
+		mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_BEGIN);
-	command->pass_begin.handle = h;
-	_renoir_dx11_command_push(&h->pass, command);
+		auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_BEGIN);
+		command->pass_begin.handle = h;
+		_renoir_dx11_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		h->compute_pass.command_list_head = nullptr;
+		h->compute_pass.command_list_tail = nullptr;
+
+		mn::mutex_lock(self->mtx);
+		mn_defer(mn::mutex_unlock(self->mtx));
+
+		auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_BEGIN);
+		command->pass_begin.handle = h;
+		_renoir_dx11_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
 }
 
 static void
@@ -3135,42 +3429,88 @@ _renoir_dx11_pass_end(Renoir* api, Renoir_Pass pass)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
-	if (h->pass.command_list_head != nullptr)
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 	{
-		mn::mutex_lock(self->mtx);
-
-		// push the pass end command
-		auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_END);
-		command->pass_end.handle = h;
-		_renoir_dx11_command_push(&h->pass, command);
-
-		// push the commands to the end of command list, if the user requested to defer api calls
-		if (self->settings.defer_api_calls)
+		if (h->raster_pass.command_list_head != nullptr)
 		{
-			if (self->command_list_tail == nullptr)
+			mn::mutex_lock(self->mtx);
+
+			// push the pass end command
+			auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_END);
+			command->pass_end.handle = h;
+			_renoir_dx11_command_push(&h->raster_pass, command);
+
+			// push the commands to the end of command list, if the user requested to defer api calls
+			if (self->settings.defer_api_calls)
 			{
-				self->command_list_head = h->pass.command_list_head;
-				self->command_list_tail = h->pass.command_list_tail;
+				if (self->command_list_tail == nullptr)
+				{
+					self->command_list_head = h->raster_pass.command_list_head;
+					self->command_list_tail = h->raster_pass.command_list_tail;
+				}
+				else
+				{
+					self->command_list_tail->next = h->raster_pass.command_list_head;
+					self->command_list_tail = h->raster_pass.command_list_tail;
+				}
 			}
+			// other than this just process the command
 			else
 			{
-				self->command_list_tail->next = h->pass.command_list_head;
-				self->command_list_tail = h->pass.command_list_tail;
+				for(auto it = h->raster_pass.command_list_head; it != nullptr; it = it->next)
+				{
+					_renoir_dx11_command_execute(self, it);
+					_renoir_dx11_command_free(self, it);
+				}
 			}
+			mn::mutex_unlock(self->mtx);
 		}
-		// other than this just process the command
-		else
-		{
-			for(auto it = h->pass.command_list_head; it != nullptr; it = it->next)
-			{
-				_renoir_dx11_command_execute(self, it);
-				_renoir_dx11_command_free(self, it);
-			}
-		}
-		mn::mutex_unlock(self->mtx);
+		h->raster_pass.command_list_head = nullptr;
+		h->raster_pass.command_list_tail = nullptr;
 	}
-	h->pass.command_list_head = nullptr;
-	h->pass.command_list_tail = nullptr;
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		if (h->compute_pass.command_list_head != nullptr)
+		{
+			mn::mutex_lock(self->mtx);
+
+			// push the pass end command
+			auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_END);
+			command->pass_end.handle = h;
+			_renoir_dx11_command_push(&h->compute_pass, command);
+
+			// push the commands to the end of command list, if the user requested to defer api calls
+			if (self->settings.defer_api_calls)
+			{
+				if (self->command_list_tail == nullptr)
+				{
+					self->command_list_head = h->compute_pass.command_list_head;
+					self->command_list_tail = h->compute_pass.command_list_tail;
+				}
+				else
+				{
+					self->command_list_tail->next = h->compute_pass.command_list_head;
+					self->command_list_tail = h->compute_pass.command_list_tail;
+				}
+			}
+			// other than this just process the command
+			else
+			{
+				for(auto it = h->compute_pass.command_list_head; it != nullptr; it = it->next)
+				{
+					_renoir_dx11_command_execute(self, it);
+					_renoir_dx11_command_free(self, it);
+				}
+			}
+			mn::mutex_unlock(self->mtx);
+		}
+		h->compute_pass.command_list_head = nullptr;
+		h->compute_pass.command_list_tail = nullptr;
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
 }
 
 static void
@@ -3179,12 +3519,14 @@ _renoir_dx11_clear(Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_CLEAR);
 	mn::mutex_unlock(self->mtx);
 
 	command->pass_clear.desc = desc;
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3193,12 +3535,14 @@ _renoir_dx11_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipelin
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_USE_PIPELINE);
 	mn::mutex_unlock(self->mtx);
 
 	command->use_pipeline.pipeline = (Renoir_Handle*)pipeline.handle;
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3207,12 +3551,14 @@ _renoir_dx11_use_program(Renoir* api, Renoir_Pass pass, Renoir_Program program)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_USE_PROGRAM);
 	mn::mutex_unlock(self->mtx);
 
 	command->use_program.program = (Renoir_Handle*)program.handle;
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3221,12 +3567,14 @@ _renoir_dx11_use_compute(Renoir* api, Renoir_Pass pass, Renoir_Compute compute)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_USE_COMPUTE);
 	mn::mutex_unlock(self->mtx);
 
 	command->use_compute.compute = (Renoir_Handle*)compute.handle;
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->compute_pass, command);
 }
 
 static void
@@ -3234,6 +3582,8 @@ _renoir_dx11_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, int
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_SCISSOR);
@@ -3243,7 +3593,7 @@ _renoir_dx11_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, int
 	command->scissor.y = y;
 	command->scissor.w = width;
 	command->scissor.h = height;
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3268,7 +3618,19 @@ _renoir_dx11_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, s
 	command->buffer_write.bytes_size = bytes_size;
 	::memcpy(command->buffer_write.bytes, bytes, bytes_size);
 
-	_renoir_dx11_command_push(&h->pass, command);
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_dx11_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_dx11_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
+	
 }
 
 static void
@@ -3292,7 +3654,18 @@ _renoir_dx11_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 	command->texture_write.desc.bytes = mn::alloc(desc.bytes_size, alignof(char)).ptr;
 	::memcpy(command->texture_write.desc.bytes, desc.bytes, desc.bytes_size);
 
-	_renoir_dx11_command_push(&h->pass, command);
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_dx11_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_dx11_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
 }
 
 static void
@@ -3341,6 +3714,8 @@ _renoir_dx11_buffer_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, RE
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_BUFFER_BIND);
 	mn::mutex_unlock(self->mtx);
@@ -3348,8 +3723,9 @@ _renoir_dx11_buffer_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, RE
 	command->buffer_bind.handle = (Renoir_Handle*)buffer.handle;
 	command->buffer_bind.shader = shader;
 	command->buffer_bind.slot = slot;
+	command->buffer_bind.gpu_access = RENOIR_ACCESS_NONE;
 
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3357,6 +3733,8 @@ _renoir_dx11_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture,
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	auto htex = (Renoir_Handle*)texture.handle;
 
@@ -3370,7 +3748,7 @@ _renoir_dx11_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture,
 	command->texture_bind.slot = slot;
 	command->texture_bind.sampler = hsampler;
 
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3378,6 +3756,8 @@ _renoir_dx11_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture 
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	auto htex = (Renoir_Handle*)texture.handle;
 
@@ -3391,7 +3771,57 @@ _renoir_dx11_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture 
 	command->texture_bind.slot = slot;
 	command->texture_bind.sampler = hsampler;
 
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
+}
+
+static void
+_renoir_dx11_buffer_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, int slot, RENOIR_ACCESS gpu_access)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+	assert(
+		gpu_access != RENOIR_ACCESS_NONE &&
+		"gpu should read, write, or both, it has no meaning to bind a buffer that the GPU cannot read or write from"
+	);
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_BUFFER_BIND);
+	mn::mutex_unlock(self->mtx);
+
+	command->buffer_bind.handle = (Renoir_Handle*)buffer.handle;
+	command->buffer_bind.shader = RENOIR_SHADER_COMPUTE;
+	command->buffer_bind.slot = slot;
+	command->buffer_bind.gpu_access = gpu_access;
+
+	_renoir_dx11_command_push(&h->raster_pass, command);
+}
+
+static void
+_renoir_dx11_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+	assert(
+		gpu_access != RENOIR_ACCESS_NONE &&
+		"gpu should read, write, or both, it has no meaning to bind a texture that the GPU cannot read or write from"
+	);
+
+	auto htex = (Renoir_Handle*)texture.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
+	mn::mutex_unlock(self->mtx);
+
+	command->texture_bind.handle = htex;
+	command->texture_bind.shader = RENOIR_SHADER_COMPUTE;
+	command->texture_bind.slot = slot;
+	command->texture_bind.gpu_access = gpu_access;
+
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3400,13 +3830,15 @@ _renoir_dx11_draw(Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_DRAW);
 	mn::mutex_unlock(self->mtx);
 
 	command->draw.desc = desc;
 
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3417,6 +3849,8 @@ _renoir_dx11_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_DISPATCH);
 	mn::mutex_unlock(self->mtx);
@@ -3425,7 +3859,7 @@ _renoir_dx11_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
 	command->dispatch.y = y;
 	command->dispatch.z = z;
 
-	_renoir_dx11_command_push(&h->pass, command);
+	_renoir_dx11_command_push(&h->compute_pass, command);
 }
 
 
@@ -3466,6 +3900,7 @@ _renoir_load_api(Renoir* api)
 
 	api->pass_swapchain_new = _renoir_dx11_pass_swapchain_new;
 	api->pass_offscreen_new = _renoir_dx11_pass_offscreen_new;
+	api->pass_compute_new = _renoir_dx11_pass_compute_new;
 	api->pass_free = _renoir_dx11_pass_free;
 	api->pass_size = _renoir_dx11_pass_size;
 
@@ -3483,6 +3918,8 @@ _renoir_load_api(Renoir* api)
 	api->buffer_bind = _renoir_dx11_buffer_bind;
 	api->texture_bind = _renoir_dx11_texture_bind;
 	api->texture_sampler_bind = _renoir_dx11_texture_sampler_bind;
+	api->texture_compute_bind = _renoir_dx11_texture_compute_bind;
+	api->buffer_compute_bind = _renoir_dx11_buffer_compute_bind;
 	api->draw = _renoir_dx11_draw;
 	api->dispatch = _renoir_dx11_dispatch;
 }

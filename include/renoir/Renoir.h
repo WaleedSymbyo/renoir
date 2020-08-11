@@ -361,6 +361,7 @@ typedef struct Renoir
 
 	Renoir_Pass (*pass_swapchain_new)(struct Renoir* api, Renoir_Swapchain view);
 	Renoir_Pass (*pass_offscreen_new)(struct Renoir* api, Renoir_Pass_Offscreen_Desc desc);
+	Renoir_Pass (*pass_compute_new)(struct Renoir* api);
 	void (*pass_free)(struct Renoir* api, Renoir_Pass pass);
 	Renoir_Size (*pass_size)(struct Renoir* api, Renoir_Pass pass);
 
@@ -383,6 +384,7 @@ typedef struct Renoir
 	void (*texture_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot);
 	void (*texture_sampler_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler);
 	// Compute Bind Functions
+	void (*buffer_compute_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, int slot, RENOIR_ACCESS gpu_access);
 	void (*texture_compute_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access);
 	// Draw
 	void (*draw)(struct Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc);
