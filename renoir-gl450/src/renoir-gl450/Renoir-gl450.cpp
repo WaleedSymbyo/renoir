@@ -753,6 +753,7 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_SWAPCHAIN_FREE,
 	RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW,
 	RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW,
+	RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW,
 	RENOIR_COMMAND_KIND_PASS_FREE,
 	RENOIR_COMMAND_KIND_BUFFER_NEW,
 	RENOIR_COMMAND_KIND_BUFFER_FREE,
@@ -814,6 +815,11 @@ struct Renoir_Command
 			Renoir_Handle* handle;
 			Renoir_Pass_Offscreen_Desc desc;
 		} pass_offscreen_new;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} pass_compute_new;
 
 		struct
 		{
@@ -958,6 +964,7 @@ struct Renoir_Command
 			Renoir_Handle* handle;
 			RENOIR_SHADER shader;
 			int slot;
+			RENOIR_ACCESS gpu_access;
 		} buffer_bind;
 
 		struct
@@ -1310,7 +1317,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
 	{
 		auto h = command->pass_new.handle;
-		h->pass.swapchain = command->pass_new.swapchain;
+		h->raster_pass.swapchain = command->pass_new.swapchain;
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -1318,13 +1325,13 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->pass_offscreen_new.handle;
 		auto& desc = command->pass_offscreen_new.desc;
-		h->pass.offscreen = desc;
+		h->raster_pass.offscreen = desc;
 
 		int width = -1;
 		int height = -1;
 		int msaa = -1;
 		
-		glCreateFramebuffers(1, &h->pass.fb);
+		glCreateFramebuffers(1, &h->raster_pass.fb);
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
@@ -1337,22 +1344,22 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					glNamedFramebufferRenderbuffer(h->pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[0]);
+					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[0]);
 				}
 				else
 				{
-					glNamedFramebufferTexture(h->pass.fb, GL_COLOR_ATTACHMENT0+i, color->texture.id, 0);
+					glNamedFramebufferTexture(h->raster_pass.fb, GL_COLOR_ATTACHMENT0+i, color->texture.id, 0);
 				}
 			}
 			else
 			{
 				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					glNamedFramebufferRenderbuffer(h->pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[desc.color[i].subresource]);
+					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[desc.color[i].subresource]);
 				}
 				else
 				{
-					glBindFramebuffer(GL_FRAMEBUFFER, h->pass.fb);
+					glBindFramebuffer(GL_FRAMEBUFFER, h->raster_pass.fb);
 					glFramebufferTexture2D(
 						GL_FRAMEBUFFER,
 						GL_COLOR_ATTACHMENT0 + i,
@@ -1395,22 +1402,22 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					glNamedFramebufferRenderbuffer(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[0]);
+					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[0]);
 				}
 				else
 				{
-					glNamedFramebufferTexture(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+					glNamedFramebufferTexture(h->raster_pass.fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
 				}
 			}
 			else
 			{
 				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					glNamedFramebufferRenderbuffer(h->pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[desc.depth_stencil.subresource]);
+					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[desc.depth_stencil.subresource]);
 				}
 				else
 				{
-					glBindFramebuffer(GL_FRAMEBUFFER, h->pass.fb);
+					glBindFramebuffer(GL_FRAMEBUFFER, h->raster_pass.fb);
 					glFramebufferTexture2D(
 						GL_FRAMEBUFFER,
 						GL_DEPTH_STENCIL_ATTACHMENT,
@@ -1444,9 +1451,14 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 		}
 		assert(_renoir_gl450_check());
-		assert(glCheckNamedFramebufferStatus(h->pass.fb, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
-		h->pass.width = width;
-		h->pass.height = height;
+		assert(glCheckNamedFramebufferStatus(h->raster_pass.fb, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
+		h->raster_pass.width = width;
+		h->raster_pass.height = height;
+		break;
+	}
+	case RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW:
+	{
+		// do nothing
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_FREE:
@@ -1455,34 +1467,46 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
 		
-		for(auto it = h->pass.command_list_head; it != NULL; it = it->next)
-			_renoir_gl450_command_free(self, command);
-		
-		// free all the bound textures if it's a framebuffer pass
-		if (h->pass.fb != 0)
+		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
-			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+			for(auto it = h->raster_pass.command_list_head; it != NULL; it = it->next)
+				_renoir_gl450_command_free(self, command);
+			
+			// free all the bound textures if it's a framebuffer pass
+			if (h->raster_pass.fb != 0)
 			{
-				auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
-				if (color == nullptr)
-					continue;
-				
-				// issue command to free the color texture
-				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
-				command->texture_free.handle = color;
-				_renoir_gl450_command_process(self, command);
-			}
+				for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+				{
+					auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
+					if (color == nullptr)
+						continue;
+					
+					// issue command to free the color texture
+					auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+					command->texture_free.handle = color;
+					_renoir_gl450_command_process(self, command);
+				}
 
-			auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
-			if (depth)
-			{
-				// issue command to free the depth texture
-				auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
-				command->texture_free.handle = depth;
-				_renoir_gl450_command_process(self, command);
-			}
+				auto depth = (Renoir_Handle*)h->raster_pass.offscreen.depth_stencil.texture.handle;
+				if (depth)
+				{
+					// issue command to free the depth texture
+					auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+					command->texture_free.handle = depth;
+					_renoir_gl450_command_process(self, command);
+				}
 
-			glDeleteFramebuffers(1, &h->pass.fb);
+				glDeleteFramebuffers(1, &h->raster_pass.fb);
+			}
+		}
+		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+		{
+			for(auto it = h->compute_pass.command_list_head; it != NULL; it = it->next)
+				_renoir_gl450_command_free(self, command);
+		}
+		else
+		{
+			assert(false && "invalid pass");
 		}
 
 		_renoir_gl450_handle_free(self, h);
@@ -1889,24 +1913,35 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	{
 		auto h = command->pass_begin.handle;
-		// if this is an on screen/window
-		if (auto swapchain = h->pass.swapchain)
+		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
-			renoir_gl450_context_window_bind(self->ctx, swapchain);
-			glBindFramebuffer(GL_FRAMEBUFFER, NULL);
-			glViewport(0, 0, swapchain->swapchain.width, swapchain->swapchain.height);
-			glDisable(GL_SCISSOR_TEST);
+			// if this is an on screen/window
+			if (auto swapchain = h->raster_pass.swapchain)
+			{
+				renoir_gl450_context_window_bind(self->ctx, swapchain);
+				glBindFramebuffer(GL_FRAMEBUFFER, NULL);
+				glViewport(0, 0, swapchain->swapchain.width, swapchain->swapchain.height);
+				glDisable(GL_SCISSOR_TEST);
+			}
+			// this is an off screen
+			else if (h->raster_pass.fb != 0)
+			{
+				glBindFramebuffer(GL_FRAMEBUFFER, h->raster_pass.fb);
+				glViewport(0, 0, h->raster_pass.width, h->raster_pass.height);
+				glDisable(GL_SCISSOR_TEST);
+			}
+			else
+			{
+				assert(false && "unreachable");
+			}
 		}
-		// this is an off screen
-		else if (h->pass.fb != 0)
+		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
 		{
-			glBindFramebuffer(GL_FRAMEBUFFER, h->pass.fb);
-			glViewport(0, 0, h->pass.width, h->pass.height);
-			glDisable(GL_SCISSOR_TEST);
+			// do nothing
 		}
 		else
 		{
-			assert(false && "unreachable");
+			assert(false && "invalid pass");
 		}
 		assert(_renoir_gl450_check());
 		break;
@@ -1914,79 +1949,91 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PASS_END:
 	{
 		auto h = command->pass_end.handle;
-		// if this is an off screen view with msaa we'll need to issue a read command to move the data
-		// from renderbuffer to the texture
-		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+
+		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
-			auto color = (Renoir_Handle*)h->pass.offscreen.color[i].texture.handle;
-			if (color == nullptr)
-				continue;
-
-			// only resolve msaa textures
-			if (color->texture.msaa == RENOIR_MSAA_MODE_NONE)
-				continue;
-
-			if (color->texture.cube_map == false)
+			// if this is an off screen view with msaa we'll need to issue a read command to move the data
+			// from renderbuffer to the texture
+			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 			{
-				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0, color->texture.id, 0);
-				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
-			}
-			else
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, self->msaa_resolve_fb);
-				glFramebufferTexture2D(
-					GL_FRAMEBUFFER,
-					GL_COLOR_ATTACHMENT0,
-					GL_TEXTURE_CUBE_MAP_POSITIVE_X + h->pass.offscreen.color[i].subresource,
-					color->texture.id,
-					0
+				auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
+				if (color == nullptr)
+					continue;
+
+				// only resolve msaa textures
+				if (color->texture.msaa == RENOIR_MSAA_MODE_NONE)
+					continue;
+
+				if (color->texture.cube_map == false)
+				{
+					glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0, color->texture.id, 0);
+					glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+				}
+				else
+				{
+					glBindFramebuffer(GL_FRAMEBUFFER, self->msaa_resolve_fb);
+					glFramebufferTexture2D(
+						GL_FRAMEBUFFER,
+						GL_COLOR_ATTACHMENT0,
+						GL_TEXTURE_CUBE_MAP_POSITIVE_X + h->raster_pass.offscreen.color[i].subresource,
+						color->texture.id,
+						0
+					);
+					glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+				}
+
+				glNamedFramebufferReadBuffer(h->raster_pass.fb, GL_COLOR_ATTACHMENT0 + i);
+				glBlitNamedFramebuffer(
+					h->raster_pass.fb,
+					self->msaa_resolve_fb,
+					0, 0, h->raster_pass.width, h->raster_pass.height,
+					0, 0, h->raster_pass.width, h->raster_pass.height,
+					GL_COLOR_BUFFER_BIT,
+					GL_LINEAR
 				);
-				glNamedFramebufferDrawBuffer(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0);
+				// clear color attachment
+				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0 + i, 0, 0);
 			}
+			assert(_renoir_gl450_check());
 
-			glNamedFramebufferReadBuffer(h->pass.fb, GL_COLOR_ATTACHMENT0 + i);
-			glBlitNamedFramebuffer(
-				h->pass.fb,
-				self->msaa_resolve_fb,
-				0, 0, h->pass.width, h->pass.height,
-				0, 0, h->pass.width, h->pass.height,
-				GL_COLOR_BUFFER_BIT,
-				GL_LINEAR
-			);
-			// clear color attachment
-			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_COLOR_ATTACHMENT0 + i, 0, 0);
+			// resolve depth textures as well
+			auto depth = (Renoir_Handle*)h->raster_pass.offscreen.depth_stencil.texture.handle;
+			if (depth && depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+			{
+				if (depth->texture.cube_map == false)
+				{
+					glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+				}
+				else
+				{
+					glBindFramebuffer(GL_FRAMEBUFFER, self->msaa_resolve_fb);
+					glFramebufferTexture2D(
+						GL_FRAMEBUFFER,
+						GL_DEPTH_STENCIL_ATTACHMENT,
+						GL_TEXTURE_CUBE_MAP_POSITIVE_X + h->raster_pass.offscreen.depth_stencil.subresource,
+						depth->texture.id,
+						0
+					);
+				}
+				glBlitNamedFramebuffer(
+					h->raster_pass.fb,
+					self->msaa_resolve_fb,
+					0, 0, h->raster_pass.width, h->raster_pass.height,
+					0, 0, h->raster_pass.width, h->raster_pass.height,
+					GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
+					GL_NEAREST
+				);
+				// clear depth attachment
+				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0);
+			}
 		}
-		assert(_renoir_gl450_check());
-
-		// resolve depth textures as well
-		auto depth = (Renoir_Handle*)h->pass.offscreen.depth_stencil.texture.handle;
-		if (depth && depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
 		{
-			if (depth->texture.cube_map == false)
-			{
-				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
-			}
-			else
-			{
-				glBindFramebuffer(GL_FRAMEBUFFER, self->msaa_resolve_fb);
-				glFramebufferTexture2D(
-					GL_FRAMEBUFFER,
-					GL_DEPTH_STENCIL_ATTACHMENT,
-					GL_TEXTURE_CUBE_MAP_POSITIVE_X + h->pass.offscreen.depth_stencil.subresource,
-					depth->texture.id,
-					0
-				);
-			}
-			glBlitNamedFramebuffer(
-				h->pass.fb,
-				self->msaa_resolve_fb,
-				0, 0, h->pass.width, h->pass.height,
-				0, 0, h->pass.width, h->pass.height,
-				GL_DEPTH_BUFFER_BIT | GL_STENCIL_BUFFER_BIT,
-				GL_NEAREST
-			);
-			// clear depth attachment
-			glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0);
+			// do nothing
+		}
+		else
+		{
+			assert(false && "invalid pass");
 		}
 		assert(_renoir_gl450_check());
 		break;
@@ -3044,7 +3091,7 @@ _renoir_gl450_pass_swapchain_new(Renoir* api, Renoir_Swapchain swapchain)
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PASS);
+	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_RASTER_PASS);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW);
 	command->pass_new.handle = h;
 	command->pass_new.swapchain = (Renoir_Handle*)swapchain.handle;
@@ -3086,10 +3133,25 @@ _renoir_gl450_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PASS);
+	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_RASTER_PASS);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW);
 	command->pass_offscreen_new.handle = h;
 	command->pass_offscreen_new.desc = desc;
+	_renoir_gl450_command_process(self, command);
+	return Renoir_Pass{h};
+}
+
+static Renoir_Pass
+_renoir_gl450_pass_compute_new(Renoir* api)
+{
+	auto self = api->ctx;
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_COMPUTE_PASS);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW);
+	command->pass_compute_new.handle = h;
 	_renoir_gl450_command_process(self, command);
 	return Renoir_Pass{h};
 }
@@ -3113,17 +3175,19 @@ _renoir_gl450_pass_size(Renoir* api, Renoir_Pass pass)
 {
 	Renoir_Size res{};
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	// if this is an on screen/window
-	if (auto swapchain = h->pass.swapchain)
+	if (auto swapchain = h->raster_pass.swapchain)
 	{
 		res.width = swapchain->swapchain.width;
 		res.height = swapchain->swapchain.height;
 	}
 	// this is an off screen
-	else if (h->pass.fb != 0)
+	else if (h->raster_pass.fb != 0)
 	{
-		res.width = h->pass.width;
-		res.height = h->pass.height;
+		res.width = h->raster_pass.width;
+		res.height = h->raster_pass.height;
 	}
 	else
 	{
@@ -3138,15 +3202,34 @@ _renoir_gl450_pass_begin(Renoir* api, Renoir_Pass pass)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
-	h->pass.command_list_head = nullptr;
-	h->pass.command_list_tail = nullptr;
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		h->raster_pass.command_list_head = nullptr;
+		h->raster_pass.command_list_tail = nullptr;
 
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
+		mn::mutex_lock(self->mtx);
+		mn_defer(mn::mutex_unlock(self->mtx));
 
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_BEGIN);
-	command->pass_begin.handle = h;
-	_renoir_gl450_command_push(&h->pass, command);
+		auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_BEGIN);
+		command->pass_begin.handle = h;
+		_renoir_gl450_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		h->compute_pass.command_list_head = nullptr;
+		h->compute_pass.command_list_tail = nullptr;
+
+		mn::mutex_lock(self->mtx);
+		mn_defer(mn::mutex_unlock(self->mtx));
+
+		auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_BEGIN);
+		command->pass_begin.handle = h;
+		_renoir_gl450_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
 }
 
 static void
@@ -3155,42 +3238,88 @@ _renoir_gl450_pass_end(Renoir* api, Renoir_Pass pass)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
-	if (h->pass.command_list_head != nullptr)
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 	{
-		mn::mutex_lock(self->mtx);
-
-		// push the pass end command
-		auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_END);
-		command->pass_end.handle = h;
-		_renoir_gl450_command_push(&h->pass, command);
-
-		// push the commands to the end of command list, if the user requested to defer api calls
-		if (self->settings.defer_api_calls)
+		if (h->raster_pass.command_list_head != nullptr)
 		{
-			if (self->command_list_tail == nullptr)
+			mn::mutex_lock(self->mtx);
+
+			// push the pass end command
+			auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_END);
+			command->pass_end.handle = h;
+			_renoir_gl450_command_push(&h->raster_pass, command);
+
+			// push the commands to the end of command list, if the user requested to defer api calls
+			if (self->settings.defer_api_calls)
 			{
-				self->command_list_head = h->pass.command_list_head;
-				self->command_list_tail = h->pass.command_list_tail;
+				if (self->command_list_tail == nullptr)
+				{
+					self->command_list_head = h->raster_pass.command_list_head;
+					self->command_list_tail = h->raster_pass.command_list_tail;
+				}
+				else
+				{
+					self->command_list_tail->next = h->raster_pass.command_list_head;
+					self->command_list_tail = h->raster_pass.command_list_tail;
+				}
 			}
+			// other than this just process the command
 			else
 			{
-				self->command_list_tail->next = h->pass.command_list_head;
-				self->command_list_tail = h->pass.command_list_tail;
+				for(auto it = h->raster_pass.command_list_head; it != nullptr; it = it->next)
+				{
+					_renoir_gl450_command_execute(self, it);
+					_renoir_gl450_command_free(self, it);
+				}
 			}
+			mn::mutex_unlock(self->mtx);
 		}
-		// other than this just process the command
-		else
-		{
-			for(auto it = h->pass.command_list_head; it != nullptr; it = it->next)
-			{
-				_renoir_gl450_command_execute(self, it);
-				_renoir_gl450_command_free(self, it);
-			}
-		}
-		mn::mutex_unlock(self->mtx);
+		h->raster_pass.command_list_head = nullptr;
+		h->raster_pass.command_list_tail = nullptr;
 	}
-	h->pass.command_list_head = nullptr;
-	h->pass.command_list_tail = nullptr;
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		if (h->compute_pass.command_list_head != nullptr)
+		{
+			mn::mutex_lock(self->mtx);
+
+			// push the pass end command
+			auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_END);
+			command->pass_end.handle = h;
+			_renoir_gl450_command_push(&h->compute_pass, command);
+
+			// push the commands to the end of command list, if the user requested to defer api calls
+			if (self->settings.defer_api_calls)
+			{
+				if (self->command_list_tail == nullptr)
+				{
+					self->command_list_head = h->compute_pass.command_list_head;
+					self->command_list_tail = h->compute_pass.command_list_tail;
+				}
+				else
+				{
+					self->command_list_tail->next = h->compute_pass.command_list_head;
+					self->command_list_tail = h->compute_pass.command_list_tail;
+				}
+			}
+			// other than this just process the command
+			else
+			{
+				for(auto it = h->compute_pass.command_list_head; it != nullptr; it = it->next)
+				{
+					_renoir_gl450_command_execute(self, it);
+					_renoir_gl450_command_free(self, it);
+				}
+			}
+			mn::mutex_unlock(self->mtx);
+		}
+		h->compute_pass.command_list_head = nullptr;
+		h->compute_pass.command_list_tail = nullptr;
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
 }
 
 static void
@@ -3199,12 +3328,14 @@ _renoir_gl450_clear(Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_CLEAR);
 	mn::mutex_unlock(self->mtx);
 
 	command->pass_clear.desc = desc;
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3213,12 +3344,14 @@ _renoir_gl450_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeli
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_USE_PIPELINE);
 	mn::mutex_unlock(self->mtx);
 
 	command->use_pipeline.pipeline = (Renoir_Handle*)pipeline.handle;
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3227,12 +3360,14 @@ _renoir_gl450_use_program(Renoir* api, Renoir_Pass pass, Renoir_Program program)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_USE_PROGRAM);
 	mn::mutex_unlock(self->mtx);
 
 	command->use_program.program = (Renoir_Handle*)program.handle;
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3241,12 +3376,14 @@ _renoir_gl450_use_compute(Renoir* api, Renoir_Pass pass, Renoir_Compute compute)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_USE_COMPUTE);
 	mn::mutex_unlock(self->mtx);
 
 	command->use_compute.compute = (Renoir_Handle*)compute.handle;
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->compute_pass, command);
 }
 
 static void
@@ -3254,6 +3391,8 @@ _renoir_gl450_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, in
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_SCISSOR);
@@ -3263,7 +3402,7 @@ _renoir_gl450_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, in
 	command->scissor.y = y;
 	command->scissor.w = width;
 	command->scissor.h = height;
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3288,7 +3427,18 @@ _renoir_gl450_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, 
 	command->buffer_write.bytes_size = bytes_size;
 	::memcpy(command->buffer_write.bytes, bytes, bytes_size);
 
-	_renoir_gl450_command_push(&h->pass, command);
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_gl450_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_gl450_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
 }
 
 static void
@@ -3312,7 +3462,18 @@ _renoir_gl450_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture textur
 	command->texture_write.desc.bytes = mn::alloc(desc.bytes_size, alignof(char)).ptr;
 	::memcpy(command->texture_write.desc.bytes, desc.bytes, desc.bytes_size);
 
-	_renoir_gl450_command_push(&h->pass, command);
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_gl450_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_gl450_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
 }
 
 static void
@@ -3361,6 +3522,8 @@ _renoir_gl450_buffer_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, R
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_BUFFER_BIND);
 	mn::mutex_unlock(self->mtx);
@@ -3369,7 +3532,7 @@ _renoir_gl450_buffer_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, R
 	command->buffer_bind.shader = shader;
 	command->buffer_bind.slot = slot;
 
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3377,6 +3540,8 @@ _renoir_gl450_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	auto htex = (Renoir_Handle*)texture.handle;
 
@@ -3390,7 +3555,54 @@ _renoir_gl450_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 	command->texture_bind.slot = slot;
 	command->texture_bind.sampler = sampler;
 
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->raster_pass, command);
+}
+
+static void
+_renoir_gl450_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
+	auto htex = (Renoir_Handle*)texture.handle;
+
+	mn::mutex_lock(self->mtx);
+	auto hsampler = _renoir_gl450_sampler_get(self, sampler);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
+	mn::mutex_unlock(self->mtx);
+
+	command->texture_bind.handle = htex;
+	command->texture_bind.shader = shader;
+	command->texture_bind.slot = slot;
+	command->texture_bind.sampler = hsampler;
+
+	_renoir_gl450_command_push(&h->raster_pass, command);
+}
+
+static void
+_renoir_gl450_buffer_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, int slot, RENOIR_ACCESS gpu_access)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+	assert(
+		gpu_access != RENOIR_ACCESS_NONE &&
+		"gpu should read, write, or both, it has no meaning to bind a buffer that the GPU cannot read or write from"
+	);
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_BUFFER_BIND);
+	mn::mutex_unlock(self->mtx);
+
+	command->buffer_bind.handle = (Renoir_Handle*)buffer.handle;
+	command->buffer_bind.shader = RENOIR_SHADER_COMPUTE;
+	command->buffer_bind.slot = slot;
+	command->buffer_bind.gpu_access = gpu_access;
+
+	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3398,6 +3610,12 @@ _renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+	assert(
+		gpu_access != RENOIR_ACCESS_NONE &&
+		"gpu should read, write, or both, it has no meaning to bind a texture that the GPU cannot read or write from"
+	);
 
 	auto htex = (Renoir_Handle*)texture.handle;
 
@@ -3412,28 +3630,7 @@ _renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture
 	command->texture_bind.sampler = sampler;
 	command->texture_bind.gpu_access = gpu_access;
 
-	_renoir_gl450_command_push(&h->pass, command);
-}
-
-static void
-_renoir_gl450_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler)
-{
-	auto self = api->ctx;
-	auto h = (Renoir_Handle*)pass.handle;
-
-	auto htex = (Renoir_Handle*)texture.handle;
-
-	mn::mutex_lock(self->mtx);
-	auto hsampler = _renoir_gl450_sampler_get(self, sampler);
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
-	mn::mutex_unlock(self->mtx);
-
-	command->texture_bind.handle = htex;
-	command->texture_bind.shader = shader;
-	command->texture_bind.slot = slot;
-	command->texture_bind.sampler = hsampler;
-
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->compute_pass, command);
 }
 
 static void
@@ -3442,13 +3639,15 @@ _renoir_gl450_draw(Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_DRAW);
 	mn::mutex_unlock(self->mtx);
 
 	command->draw.desc = desc;
 
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
 static void
@@ -3459,6 +3658,8 @@ _renoir_gl450_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 
+	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
+
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_DISPATCH);
 	mn::mutex_unlock(self->mtx);
@@ -3467,7 +3668,7 @@ _renoir_gl450_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
 	command->dispatch.y = y;
 	command->dispatch.z = z;
 
-	_renoir_gl450_command_push(&h->pass, command);
+	_renoir_gl450_command_push(&h->compute_pass, command);
 }
 
 inline static void
@@ -3507,6 +3708,7 @@ _renoir_load_api(Renoir* api)
 
 	api->pass_swapchain_new = _renoir_gl450_pass_swapchain_new;
 	api->pass_offscreen_new = _renoir_gl450_pass_offscreen_new;
+	api->pass_compute_new = _renoir_gl450_pass_compute_new;
 	api->pass_free = _renoir_gl450_pass_free;
 	api->pass_size = _renoir_gl450_pass_size;
 
@@ -3524,6 +3726,7 @@ _renoir_load_api(Renoir* api)
 	api->buffer_bind = _renoir_gl450_buffer_bind;
 	api->texture_bind = _renoir_gl450_texture_bind;
 	api->texture_sampler_bind = _renoir_gl450_texture_sampler_bind;
+	api->buffer_compute_bind = _renoir_gl450_buffer_compute_bind;
 	api->texture_compute_bind = _renoir_gl450_texture_compute_bind;
 	api->draw = _renoir_gl450_draw;
 	api->dispatch = _renoir_gl450_dispatch;

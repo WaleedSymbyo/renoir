@@ -12,7 +12,8 @@ enum RENOIR_HANDLE_KIND
 {
 	RENOIR_HANDLE_KIND_NONE,
 	RENOIR_HANDLE_KIND_SWAPCHAIN,
-	RENOIR_HANDLE_KIND_PASS,
+	RENOIR_HANDLE_KIND_RASTER_PASS,
+	RENOIR_HANDLE_KIND_COMPUTE_PASS,
 	RENOIR_HANDLE_KIND_BUFFER,
 	RENOIR_HANDLE_KIND_TEXTURE,
 	RENOIR_HANDLE_KIND_SAMPLER,
@@ -46,7 +47,13 @@ struct Renoir_Handle
 			GLuint fb;
 			int width, height;
 			Renoir_Pass_Offscreen_Desc offscreen;
-		} pass;
+		} raster_pass;
+
+		struct
+		{
+			Renoir_Command *command_list_head;
+			Renoir_Command *command_list_tail;
+		} compute_pass;
 
 		struct
 		{
