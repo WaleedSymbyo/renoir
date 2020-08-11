@@ -1418,8 +1418,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 			{
 				auto texture_staging_desc = texture_desc;
-				texture_desc.Usage = D3D11_USAGE_STAGING;
-				texture_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
+				texture_staging_desc.BindFlags = 0;
+				texture_staging_desc.Usage = D3D11_USAGE_STAGING;
+				texture_staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
 				res = self->device->CreateTexture1D(&texture_staging_desc, nullptr, &h->texture.texture1d_staging);
 				assert(SUCCEEDED(res));
 			}
@@ -1442,7 +1443,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				if (_renoir_pixelformat_is_depth(desc.pixel_format) == false)
 					texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 				else
-					texture_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
+					texture_desc.BindFlags = D3D11_BIND_DEPTH_STENCIL | D3D11_BIND_SHADER_RESOURCE;
 			}
 			else
 			{
@@ -1499,14 +1500,17 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto res = self->device->CreateShaderResourceView(h->texture.texture2d, &view_desc, &h->texture.shader_view);
 			assert(SUCCEEDED(res));
 
-			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
-			uav_desc.Format = dx_pixelformat;
-			if (h->texture.cube_map == false)
-				uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
-			else
-				uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
-			res = self->device->CreateUnorderedAccessView(h->texture.texture2d, &uav_desc, &h->texture.uav);
-			assert(SUCCEEDED(res));
+			if (_renoir_pixelformat_is_depth(desc.pixel_format) == false)
+			{
+				D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+				uav_desc.Format = dx_pixelformat;
+				if (h->texture.cube_map == false)
+					uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+				else
+					uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+				auto res = self->device->CreateUnorderedAccessView(h->texture.texture2d, &uav_desc, &h->texture.uav);
+				assert(SUCCEEDED(res));
+			}
 
 			if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
 			{
@@ -1533,8 +1537,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 			{
 				auto texture_staging_desc = texture_desc;
-				texture_desc.Usage = D3D11_USAGE_STAGING;
-				texture_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
+				texture_staging_desc.BindFlags = 0;
+				texture_staging_desc.Usage = D3D11_USAGE_STAGING;
+				texture_staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
 				res = self->device->CreateTexture2D(&texture_staging_desc, nullptr, &h->texture.texture2d_staging);
 				assert(SUCCEEDED(res));
 			}
@@ -1585,8 +1590,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 			{
 				auto texture_staging_desc = texture_desc;
-				texture_desc.Usage = D3D11_USAGE_STAGING;
-				texture_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
+				texture_staging_desc.BindFlags = 0;
+				texture_staging_desc.Usage = D3D11_USAGE_STAGING;
+				texture_staging_desc.CPUAccessFlags = D3D11_CPU_ACCESS_READ | D3D11_CPU_ACCESS_WRITE;
 				res = self->device->CreateTexture3D(&texture_staging_desc, nullptr, &h->texture.texture3d_staging);
 				assert(SUCCEEDED(res));
 			}
@@ -2230,7 +2236,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		if (h->texture.texture1d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto res = self->context->Map(h->texture.texture1d_staging, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_resource);
+			auto res = self->context->Map(h->texture.texture1d_staging, 0, D3D11_MAP_WRITE, 0, &mapped_resource);
 			assert(SUCCEEDED(res));
 			::memcpy(
 				(char*)mapped_resource.pData + desc.x * dx_pixel_size,
@@ -2263,7 +2269,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				desc.z = 0;
 
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto res = self->context->Map(h->texture.texture2d_staging, desc.z, D3D11_MAP_WRITE_DISCARD, 0, &mapped_resource);
+			auto res = self->context->Map(h->texture.texture2d_staging, desc.z, D3D11_MAP_WRITE, 0, &mapped_resource);
 			assert(SUCCEEDED(res));
 
 			char* write_ptr = (char*)mapped_resource.pData;
@@ -2303,7 +2309,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		else if (h->texture.texture3d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto res = self->context->Map(h->texture.texture3d_staging, 0, D3D11_MAP_WRITE_DISCARD, 0, &mapped_resource);
+			auto res = self->context->Map(h->texture.texture3d_staging, 0, D3D11_MAP_WRITE, 0, &mapped_resource);
 			assert(SUCCEEDED(res));
 
 			char* write_ptr = (char*)mapped_resource.pData;
@@ -2495,6 +2501,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			self->context->GSSetSamplers(command->texture_bind.slot, 1, &command->texture_bind.sampler->sampler.sampler);
 			break;
 		case RENOIR_SHADER_COMPUTE:
+			assert(_renoir_pixelformat_is_depth(h->texture.pixel_format) == false && "you can't write to depth buffer from compute shader");
 			if (command->texture_bind.gpu_access == RENOIR_ACCESS_READ)
 			{
 				self->context->CSSetShaderResources(command->texture_bind.slot, 1, &h->texture.shader_view);
