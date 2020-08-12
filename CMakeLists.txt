@@ -15,6 +15,7 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 option(RENOIR_BUILD_EXAMPLES "Build example applications that showcase the renoir libraries." ON)
 option(RENOIR_UNITY_BUILD "Combine all renoir source files into one jumbo build." ON)
 option(RENOIR_USE_LOCAL_MN "Uses the local mn submodule in renoir" ON)
+option(RENOIR_DEBUG_LAYER "Turn on debug layer in underlying graphics api" OFF)
 
 if (RENOIR_USE_LOCAL_MN)
 	add_subdirectory(external/mn EXCLUDE_FROM_ALL)

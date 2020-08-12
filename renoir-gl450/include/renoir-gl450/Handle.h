@@ -71,8 +71,8 @@ struct Renoir_Handle
 			RENOIR_ACCESS access;
 			Renoir_Sampler_Desc default_sampler_desc;
 			RENOIR_PIXELFORMAT pixel_format;
+			int mipmaps;
 			bool cube_map;
-			bool mipmaps;
 			bool render_target;
 			RENOIR_MSAA_MODE msaa;
 			GLuint render_buffer[6];

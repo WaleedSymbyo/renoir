@@ -14,6 +14,8 @@
 #include <glslang/Include/glslang_c_interface.h>
 #include <glslang/Include/ResourceLimits.h>
 
+#include <math.h>
+
 const TBuiltInResource DefaultTBuiltInResource = {
 	/* .MaxLights = */ 32,
 	/* .MaxClipPlanes = */ 6,
@@ -159,6 +161,70 @@ _renoir_gl450_check()
 	default:
 		return true;
 	}
+}
+
+inline static const char*
+_renoir_gl450_error_source_string(GLenum v)
+{
+	switch(v)
+	{
+	case GL_DEBUG_SOURCE_API: return "api";
+	case GL_DEBUG_SOURCE_WINDOW_SYSTEM: return "window system";
+	case GL_DEBUG_SOURCE_SHADER_COMPILER: return "shader compiler";
+	case GL_DEBUG_SOURCE_THIRD_PARTY: return "third party";
+	case GL_DEBUG_SOURCE_APPLICATION: "application";
+	case GL_DEBUG_SOURCE_OTHER: return "other";
+	default: return "<unknown>";
+	}
+}
+
+inline static const char*
+_renoir_gl450_error_type_string(GLenum v)
+{
+	switch(v)
+	{
+	case GL_DEBUG_TYPE_ERROR: return "error";
+	case GL_DEBUG_TYPE_DEPRECATED_BEHAVIOR: return "deprecated behavior";
+	case GL_DEBUG_TYPE_UNDEFINED_BEHAVIOR: return "undefined behavior";
+	case GL_DEBUG_TYPE_PORTABILITY: return "not portable";
+	case GL_DEBUG_TYPE_PERFORMANCE: return "other";
+	case GL_DEBUG_TYPE_MARKER: return "marker";
+	case GL_DEBUG_TYPE_PUSH_GROUP: return "push group";
+	case GL_DEBUG_TYPE_POP_GROUP: return "pop group";
+	case GL_DEBUG_TYPE_OTHER: return "other";
+	default: return "<unknown>";
+	}
+}
+
+inline static const char*
+_renoir_gl450_error_severtiy_string(GLenum v)
+{
+	switch(v)
+	{
+	case GL_DEBUG_SEVERITY_HIGH: return "high";
+	case GL_DEBUG_SEVERITY_MEDIUM: return "medium";
+	case GL_DEBUG_SEVERITY_LOW: return "low";
+	case GL_DEBUG_SEVERITY_NOTIFICATION: return "notification";
+	default: return "<unknown>";
+	}
+}
+
+void GLAPIENTRY
+_renoir_gl450_error_log(GLenum source,
+				GLenum type,
+				GLuint id,
+				GLenum severity,
+				GLsizei length,
+				const GLchar* message,
+				const void* userParam)
+{
+	mn::log_debug(
+		"OpenGL450: source = '{}', type = '{}', severity = '{}', message = '{}'",
+		_renoir_gl450_error_source_string(source),
+		_renoir_gl450_error_type_string(type),
+		_renoir_gl450_error_severtiy_string(severity),
+		message
+	);
 }
 
 inline static glslang_stage_t
@@ -1293,6 +1359,12 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			_renoir_gl450_state_capture(self->state);
 		}
 		self->glewInited = true;
+		// During init, enable debug output
+		#if RENOIR_DEBUG_LAYER
+		glEnable(GL_DEBUG_OUTPUT);
+		glDebugMessageCallback(_renoir_gl450_error_log, nullptr);
+		#endif
+
 		glCreateVertexArrays(1, &self->vao);
 		glCreateFramebuffers(1, &self->msaa_resolve_fb);
 		assert(_renoir_gl450_check());
@@ -1344,42 +1416,48 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
+					assert(desc.color[i].level == 0 && "multisampled textures does not support mipmaps");
 					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[0]);
 				}
 				else
 				{
-					glNamedFramebufferTexture(h->raster_pass.fb, GL_COLOR_ATTACHMENT0+i, color->texture.id, 0);
+					assert(desc.color[i].level < color->texture.mipmaps && "out of range mip level");
+					glNamedFramebufferTexture(h->raster_pass.fb, GL_COLOR_ATTACHMENT0+i, color->texture.id, desc.color[i].level);
 				}
 			}
 			else
 			{
 				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
+					assert(desc.color[i].level == 0 && "multisampled textures does not support mipmaps");
 					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_COLOR_ATTACHMENT0+i,  GL_RENDERBUFFER, color->texture.render_buffer[desc.color[i].subresource]);
 				}
 				else
 				{
+					assert(desc.color[i].level < color->texture.mipmaps && "out of range mip level");
+					assert(_renoir_gl450_check());
 					glBindFramebuffer(GL_FRAMEBUFFER, h->raster_pass.fb);
 					glFramebufferTexture2D(
 						GL_FRAMEBUFFER,
 						GL_COLOR_ATTACHMENT0 + i,
 						GL_TEXTURE_CUBE_MAP_POSITIVE_X + desc.color[i].subresource,
 						color->texture.id,
-						0
+						desc.color[i].level
 					);
+					assert(_renoir_gl450_check());
 				}
 			}
 
 			// first time getting the width/height
 			if (width == -1 && height == -1)
 			{
-				width = color->texture.size.width;
-				height = color->texture.size.height;
+				width = color->texture.size.width * ::powf(0.5f, desc.color[i].level);
+				height = color->texture.size.height * ::powf(0.5f, desc.color[i].level);
 			}
 			else
 			{
-				assert(color->texture.size.width == width);
-				assert(color->texture.size.height == height);
+				assert(color->texture.size.width * ::powf(0.5f, desc.color[i].level) == width);
+				assert(color->texture.size.height * ::powf(0.5f, desc.color[i].level) == height);
 			}
 
 			// check that all of them has the same msaa
@@ -1392,6 +1470,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(msaa == color->texture.msaa);
 			}
 		}
+		assert(_renoir_gl450_check());
 
 		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		if (depth)
@@ -1402,28 +1481,32 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
+					assert(desc.depth_stencil.level == 0 && "multisampled textures does not support mipmaps");
 					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[0]);
 				}
 				else
 				{
-					glNamedFramebufferTexture(h->raster_pass.fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, 0);
+					assert(desc.depth_stencil.level < depth->texture.mipmaps && "out of range mip level");
+					glNamedFramebufferTexture(h->raster_pass.fb, GL_DEPTH_STENCIL_ATTACHMENT, depth->texture.id, desc.depth_stencil.level);
 				}
 			}
 			else
 			{
 				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
 				{
+					assert(desc.depth_stencil.level == 0 && "multisampled textures does not support mipmaps");
 					glNamedFramebufferRenderbuffer(h->raster_pass.fb, GL_DEPTH_STENCIL_ATTACHMENT,  GL_RENDERBUFFER, depth->texture.render_buffer[desc.depth_stencil.subresource]);
 				}
 				else
 				{
+					assert(desc.depth_stencil.level < depth->texture.mipmaps && "out of range mip level");
 					glBindFramebuffer(GL_FRAMEBUFFER, h->raster_pass.fb);
 					glFramebufferTexture2D(
 						GL_FRAMEBUFFER,
 						GL_DEPTH_STENCIL_ATTACHMENT,
 						GL_TEXTURE_CUBE_MAP_POSITIVE_X + desc.depth_stencil.subresource,
 						depth->texture.id,
-						0
+						desc.depth_stencil.level
 					);
 				}
 			}
@@ -1431,13 +1514,13 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			// first time getting the width/height
 			if (width == -1 && height == -1)
 			{
-				width = depth->texture.size.width;
-				height = depth->texture.size.height;
+				width = depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level);
+				height = depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level);
 			}
 			else
 			{
-				assert(depth->texture.size.width == width);
-				assert(depth->texture.size.height == height);
+				assert(depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level) == width);
+				assert(depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level) == height);
 			}
 
 			// check that all of them has the same msaa
@@ -1573,7 +1656,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			glCreateTextures(GL_TEXTURE_1D, 1, &h->texture.id);
 			// 1D texture
-			glTextureStorage1D(h->texture.id, 1, gl_internal_format, desc.size.width);
+			glTextureStorage1D(h->texture.id, h->texture.mipmaps, gl_internal_format, desc.size.width);
 			if (desc.data[0] != nullptr)
 			{
 				glTextureSubImage1D(
@@ -1585,7 +1668,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					gl_type,
 					desc.data[0]
 				);
-				if (h->texture.mipmaps)
+				if (h->texture.mipmaps > 1)
 					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
@@ -1595,7 +1678,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				glCreateTextures(GL_TEXTURE_2D, 1, &h->texture.id);
 				// 2D texture
-				glTextureStorage2D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height);
+				glTextureStorage2D(h->texture.id, h->texture.mipmaps, gl_internal_format, desc.size.width, desc.size.height);
 				if (desc.data[0] != nullptr)
 				{
 					glTextureSubImage2D(
@@ -1609,7 +1692,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 						gl_type,
 						desc.data[0]
 					);
-					if (h->texture.mipmaps)
+					if (h->texture.mipmaps > 1)
 						glGenerateTextureMipmap(h->texture.id);
 				}
 
@@ -1629,7 +1712,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			else
 			{
 				glCreateTextures(GL_TEXTURE_CUBE_MAP, 1, &h->texture.id);
-				glTextureStorage2D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height);
+				glTextureStorage2D(h->texture.id, h->texture.mipmaps, gl_internal_format, desc.size.width, desc.size.height);
 				for (size_t i = 0; i < 6; ++i)
 				{
 					if (desc.data[i] == nullptr)
@@ -1665,7 +1748,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					}
 				}
 
-				if (h->texture.mipmaps)
+				if (h->texture.mipmaps > 1)
 					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
@@ -1673,7 +1756,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			glCreateTextures(GL_TEXTURE_3D, 1, &h->texture.id);
 			// 3D texture
-			glTextureStorage3D(h->texture.id, 1, gl_internal_format, desc.size.width, desc.size.height, desc.size.depth);
+			glTextureStorage3D(h->texture.id, h->texture.mipmaps, gl_internal_format, desc.size.width, desc.size.height, desc.size.depth);
 			if (desc.data[0] != nullptr)
 			{
 				glTextureSubImage3D(
@@ -1689,7 +1772,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					gl_type,
 					desc.data[0]
 				);
-				if (h->texture.mipmaps)
+				if (h->texture.mipmaps > 1)
 					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
@@ -2180,7 +2263,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				gl_type,
 				command->texture_write.desc.bytes
 			);
-			if (h->texture.mipmaps)
+			if (h->texture.mipmaps > 1)
 				glGenerateTextureMipmap(h->texture.id);
 		}
 		else if (h->texture.size.height > 0 && h->texture.size.depth == 0)
@@ -2199,7 +2282,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					gl_type,
 					command->texture_write.desc.bytes
 				);
-				if (h->texture.mipmaps)
+				if (h->texture.mipmaps > 1)
 					glGenerateTextureMipmap(h->texture.id);
 			}
 			else
@@ -2218,7 +2301,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					gl_type,
 					command->texture_write.desc.bytes
 				);
-				if (h->texture.mipmaps)
+				if (h->texture.mipmaps > 1)
 					glGenerateTextureMipmap(h->texture.id);
 			}
 		}
@@ -2238,7 +2321,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				gl_type,
 				command->texture_write.desc.bytes
 			);
-			if (h->texture.mipmaps)
+			if (h->texture.mipmaps > 1)
 				glGenerateTextureMipmap(h->texture.id);
 		}
 		assert(_renoir_gl450_check());
@@ -2801,6 +2884,9 @@ _renoir_gl450_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 {
 	if (desc.usage == RENOIR_USAGE_NONE)
 		desc.usage = RENOIR_USAGE_STATIC;
+
+	if (desc.mipmaps == 0)
+		desc.mipmaps = 1;
 
 	if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access == RENOIR_ACCESS_NONE)
 	{

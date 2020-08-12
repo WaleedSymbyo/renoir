@@ -79,3 +79,10 @@ target_include_directories(renoir-gl450
 	${CMAKE_CURRENT_SOURCE_DIR}/include
 	${PROJECT_SOURCE_DIR}/include
 )
+
+if (${RENOIR_DEBUG_LAYER})
+	message(STATUS "feature: gl450 debug layer enabled")
+	target_compile_definitions(renoir-gl450 PRIVATE RENOIR_DEBUG_LAYER=1)
+else()
+	target_compile_definitions(renoir-gl450 PRIVATE RENOIR_DEBUG_LAYER=0)
+endif()

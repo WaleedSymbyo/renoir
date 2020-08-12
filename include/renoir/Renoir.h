@@ -120,13 +120,13 @@ typedef enum RENOIR_SEMANTIC {
 } RENOIR_SEMANTIC;
 
 typedef enum RENOIR_COMPARE {
+	RENOIR_COMPARE_NEVER,
 	RENOIR_COMPARE_LESS,
 	RENOIR_COMPARE_EQUAL,
 	RENOIR_COMPARE_LESS_EQUAL,
 	RENOIR_COMPARE_GREATER,
 	RENOIR_COMPARE_NOT_EQUAL,
 	RENOIR_COMPARE_GREATER_EQUAL,
-	RENOIR_COMPARE_NEVER,
 	RENOIR_COMPARE_ALWAYS
 } RENOIR_COMPARE;
 
@@ -243,7 +243,7 @@ typedef struct Renoir_Sampler_Desc {
 	RENOIR_TEXMODE u; // default: RENOIR_TEXMODE_WRAP
 	RENOIR_TEXMODE v; // default: RENOIR_TEXMODE_WRAP
 	RENOIR_TEXMODE w; // default: RENOIR_TEXMODE_WRAP
-	RENOIR_COMPARE compare; // default: RENOIR_COMPARE_LESS
+	RENOIR_COMPARE compare; // default: RENOIR_COMPARE_NEVER
 	Renoir_Color border; // default: black
 } Renoir_Sampler_Desc;
 
@@ -252,7 +252,7 @@ typedef struct Renoir_Texture_Desc {
 	RENOIR_USAGE usage; // default: RENOIR_USAGE_STATIC
 	RENOIR_ACCESS access; // default: RENOIR_ACCESS_NONE
 	RENOIR_PIXELFORMAT pixel_format;
-	bool mipmaps; // default: false, if true will generate mipmaps for the texture
+	int mipmaps; // default: 0, if > 0 will generate this number of mipmaps level for the texture
 	// by default use data[0], in case of cube map index the array with RENOIR_CUBE_FACE and set data pointers accordingly
 	void* data[6]; // you can pass null here to only allocate texture without initializing it
 	size_t data_size;
@@ -314,6 +314,8 @@ typedef struct Renoir_Pass_Attachment {
 	Renoir_Texture texture;
 	// this is used for cube maps and it should hold face index (RENOIR_CUBE_FACE), otherwise it should be 0
 	int subresource;
+	// this is used to choose which mip map level you want to be attached to the pass
+	int level;
 } Renoir_Pass_Attachment;
 
 typedef struct Renoir_Pass_Offscreen_Desc {
