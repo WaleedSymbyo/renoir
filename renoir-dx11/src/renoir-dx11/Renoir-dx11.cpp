@@ -1393,6 +1393,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
+			if (h->texture.mipmaps)
+				texture_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
 			if (desc.data[0])
 			{
@@ -1431,7 +1433,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			res = self->device->CreateUnorderedAccessView(h->texture.texture1d, &uav_desc, &h->texture.uav);
 			assert(SUCCEEDED(res));
 
-			if (desc.data[0] && h->texture.mipmaps)
+			if (h->texture.mipmaps)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		else if (desc.size.height > 0 && desc.size.depth == 0)
@@ -1456,6 +1458,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 			texture_desc.SampleDesc.Count = 1;
+			if (h->texture.mipmaps)
+				texture_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
 			bool no_data = true;
 			D3D11_SUBRESOURCE_DATA data_desc[6];
@@ -1544,7 +1548,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(SUCCEEDED(res));
 			}
 
-			if (no_data == false && h->texture.mipmaps)
+			if (h->texture.mipmaps)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		else if (desc.size.height > 0 && desc.size.depth > 0)
@@ -1558,6 +1562,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
+			if (h->texture.mipmaps)
+				texture_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
 			if (desc.data[0])
 			{
@@ -1597,7 +1603,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(SUCCEEDED(res));
 			}
 
-			if (desc.data[0] && h->texture.mipmaps)
+			if (h->texture.mipmaps)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		break;
