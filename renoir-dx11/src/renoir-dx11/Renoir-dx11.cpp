@@ -2086,66 +2086,50 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				if (hres->kind == RENOIR_HANDLE_KIND_BUFFER)
 				{
-					D3D11_BOX src_box{};
-					src_box.left = 0;
-					src_box.right = hres->buffer.size;
-					src_box.bottom = 1;
-					src_box.back = 1;
-					self->context->CopySubresourceRegion(
-						hres->buffer.buffer_staging,
-						0,
-						0,
-						0,
-						0,
-						hres->buffer.buffer,
-						0,
-						&src_box
-					);
-				}
-				else if (hres->kind == RENOIR_HANDLE_KIND_TEXTURE)
-				{
-					if (hres->texture.texture1d)
+					if (hres->buffer.access == RENOIR_ACCESS_READ || hres->buffer.access == RENOIR_ACCESS_READ_WRITE)
 					{
 						D3D11_BOX src_box{};
 						src_box.left = 0;
-						src_box.right = hres->texture.size.width;
+						src_box.right = hres->buffer.size;
 						src_box.bottom = 1;
 						src_box.back = 1;
 						self->context->CopySubresourceRegion(
-							hres->texture.texture1d_staging,
+							hres->buffer.buffer_staging,
 							0,
 							0,
 							0,
 							0,
-							hres->texture.texture1d,
+							hres->buffer.buffer,
 							0,
 							&src_box
 						);
 					}
-					else if (hres->texture.texture2d)
+				}
+				else if (hres->kind == RENOIR_HANDLE_KIND_TEXTURE)
+				{
+					if (hres->texture.access == RENOIR_ACCESS_READ || hres->texture.access == RENOIR_ACCESS_READ_WRITE)
 					{
-						if (hres->texture.cube_map == false)
+						if (hres->texture.texture1d)
 						{
 							D3D11_BOX src_box{};
 							src_box.left = 0;
 							src_box.right = hres->texture.size.width;
-							src_box.top = 0;
-							src_box.bottom = hres->texture.size.height;
+							src_box.bottom = 1;
 							src_box.back = 1;
 							self->context->CopySubresourceRegion(
-								hres->texture.texture2d_staging,
+								hres->texture.texture1d_staging,
 								0,
 								0,
 								0,
 								0,
-								hres->texture.texture2d,
+								hres->texture.texture1d,
 								0,
 								&src_box
 							);
 						}
-						else
+						else if (hres->texture.texture2d)
 						{
-							for (int i = 0; i < 6; ++i)
+							if (hres->texture.cube_map == false)
 							{
 								D3D11_BOX src_box{};
 								src_box.left = 0;
@@ -2155,36 +2139,58 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 								src_box.back = 1;
 								self->context->CopySubresourceRegion(
 									hres->texture.texture2d_staging,
-									i,
+									0,
 									0,
 									0,
 									0,
 									hres->texture.texture2d,
-									i,
+									0,
 									&src_box
 								);
 							}
+							else
+							{
+								for (int i = 0; i < 6; ++i)
+								{
+									D3D11_BOX src_box{};
+									src_box.left = 0;
+									src_box.right = hres->texture.size.width;
+									src_box.top = 0;
+									src_box.bottom = hres->texture.size.height;
+									src_box.back = 1;
+									self->context->CopySubresourceRegion(
+										hres->texture.texture2d_staging,
+										i,
+										0,
+										0,
+										0,
+										hres->texture.texture2d,
+										i,
+										&src_box
+									);
+								}
+							}
 						}
-					}
-					else if (hres->texture.texture3d)
-					{
-						D3D11_BOX src_box{};
-						src_box.left = 0;
-						src_box.right = hres->texture.size.width;
-						src_box.top = 0;
-						src_box.bottom = hres->texture.size.height;
-						src_box.front = 0;
-						src_box.back = hres->texture.size.depth;
-						self->context->CopySubresourceRegion(
-							h->texture.texture3d_staging,
-							0,
-							0,
-							0,
-							0,
-							h->texture.texture3d,
-							0,
-							&src_box
-						);
+						else if (hres->texture.texture3d)
+						{
+							D3D11_BOX src_box{};
+							src_box.left = 0;
+							src_box.right = hres->texture.size.width;
+							src_box.top = 0;
+							src_box.bottom = hres->texture.size.height;
+							src_box.front = 0;
+							src_box.back = hres->texture.size.depth;
+							self->context->CopySubresourceRegion(
+								h->texture.texture3d_staging,
+								0,
+								0,
+								0,
+								0,
+								h->texture.texture3d,
+								0,
+								&src_box
+							);
+						}
 					}
 				}
 				else
