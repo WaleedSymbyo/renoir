@@ -11,117 +11,8 @@
 #include <mn/Log.h>
 
 #include <GL/glew.h>
-#include <glslang/Include/glslang_c_interface.h>
-#include <glslang/Include/ResourceLimits.h>
 
 #include <math.h>
-
-const TBuiltInResource DefaultTBuiltInResource = {
-	/* .MaxLights = */ 32,
-	/* .MaxClipPlanes = */ 6,
-	/* .MaxTextureUnits = */ 32,
-	/* .MaxTextureCoords = */ 32,
-	/* .MaxVertexAttribs = */ 64,
-	/* .MaxVertexUniformComponents = */ 4096,
-	/* .MaxVaryingFloats = */ 64,
-	/* .MaxVertexTextureImageUnits = */ 32,
-	/* .MaxCombinedTextureImageUnits = */ 80,
-	/* .MaxTextureImageUnits = */ 32,
-	/* .MaxFragmentUniformComponents = */ 4096,
-	/* .MaxDrawBuffers = */ 32,
-	/* .MaxVertexUniformVectors = */ 128,
-	/* .MaxVaryingVectors = */ 8,
-	/* .MaxFragmentUniformVectors = */ 16,
-	/* .MaxVertexOutputVectors = */ 16,
-	/* .MaxFragmentInputVectors = */ 15,
-	/* .MinProgramTexelOffset = */ -8,
-	/* .MaxProgramTexelOffset = */ 7,
-	/* .MaxClipDistances = */ 8,
-	/* .MaxComputeWorkGroupCountX = */ 65535,
-	/* .MaxComputeWorkGroupCountY = */ 65535,
-	/* .MaxComputeWorkGroupCountZ = */ 65535,
-	/* .MaxComputeWorkGroupSizeX = */ 1024,
-	/* .MaxComputeWorkGroupSizeY = */ 1024,
-	/* .MaxComputeWorkGroupSizeZ = */ 64,
-	/* .MaxComputeUniformComponents = */ 1024,
-	/* .MaxComputeTextureImageUnits = */ 16,
-	/* .MaxComputeImageUniforms = */ 8,
-	/* .MaxComputeAtomicCounters = */ 8,
-	/* .MaxComputeAtomicCounterBuffers = */ 1,
-	/* .MaxVaryingComponents = */ 60,
-	/* .MaxVertexOutputComponents = */ 64,
-	/* .MaxGeometryInputComponents = */ 64,
-	/* .MaxGeometryOutputComponents = */ 128,
-	/* .MaxFragmentInputComponents = */ 128,
-	/* .MaxImageUnits = */ 8,
-	/* .MaxCombinedImageUnitsAndFragmentOutputs = */ 8,
-	/* .MaxCombinedShaderOutputResources = */ 8,
-	/* .MaxImageSamples = */ 0,
-	/* .MaxVertexImageUniforms = */ 0,
-	/* .MaxTessControlImageUniforms = */ 0,
-	/* .MaxTessEvaluationImageUniforms = */ 0,
-	/* .MaxGeometryImageUniforms = */ 0,
-	/* .MaxFragmentImageUniforms = */ 8,
-	/* .MaxCombinedImageUniforms = */ 8,
-	/* .MaxGeometryTextureImageUnits = */ 16,
-	/* .MaxGeometryOutputVertices = */ 256,
-	/* .MaxGeometryTotalOutputComponents = */ 1024,
-	/* .MaxGeometryUniformComponents = */ 1024,
-	/* .MaxGeometryVaryingComponents = */ 64,
-	/* .MaxTessControlInputComponents = */ 128,
-	/* .MaxTessControlOutputComponents = */ 128,
-	/* .MaxTessControlTextureImageUnits = */ 16,
-	/* .MaxTessControlUniformComponents = */ 1024,
-	/* .MaxTessControlTotalOutputComponents = */ 4096,
-	/* .MaxTessEvaluationInputComponents = */ 128,
-	/* .MaxTessEvaluationOutputComponents = */ 128,
-	/* .MaxTessEvaluationTextureImageUnits = */ 16,
-	/* .MaxTessEvaluationUniformComponents = */ 1024,
-	/* .MaxTessPatchComponents = */ 120,
-	/* .MaxPatchVertices = */ 32,
-	/* .MaxTessGenLevel = */ 64,
-	/* .MaxViewports = */ 16,
-	/* .MaxVertexAtomicCounters = */ 0,
-	/* .MaxTessControlAtomicCounters = */ 0,
-	/* .MaxTessEvaluationAtomicCounters = */ 0,
-	/* .MaxGeometryAtomicCounters = */ 0,
-	/* .MaxFragmentAtomicCounters = */ 8,
-	/* .MaxCombinedAtomicCounters = */ 8,
-	/* .MaxAtomicCounterBindings = */ 1,
-	/* .MaxVertexAtomicCounterBuffers = */ 0,
-	/* .MaxTessControlAtomicCounterBuffers = */ 0,
-	/* .MaxTessEvaluationAtomicCounterBuffers = */ 0,
-	/* .MaxGeometryAtomicCounterBuffers = */ 0,
-	/* .MaxFragmentAtomicCounterBuffers = */ 1,
-	/* .MaxCombinedAtomicCounterBuffers = */ 1,
-	/* .MaxAtomicCounterBufferSize = */ 16384,
-	/* .MaxTransformFeedbackBuffers = */ 4,
-	/* .MaxTransformFeedbackInterleavedComponents = */ 64,
-	/* .MaxCullDistances = */ 8,
-	/* .MaxCombinedClipAndCullDistances = */ 8,
-	/* .MaxSamples = */ 4,
-	/* .maxMeshOutputVerticesNV = */ 256,
-	/* .maxMeshOutputPrimitivesNV = */ 512,
-	/* .maxMeshWorkGroupSizeX_NV = */ 32,
-	/* .maxMeshWorkGroupSizeY_NV = */ 1,
-	/* .maxMeshWorkGroupSizeZ_NV = */ 1,
-	/* .maxTaskWorkGroupSizeX_NV = */ 32,
-	/* .maxTaskWorkGroupSizeY_NV = */ 1,
-	/* .maxTaskWorkGroupSizeZ_NV = */ 1,
-	/* .maxMeshViewCountNV = */ 4,
-
-	/* .limits = */ {
-		/* .nonInductiveForLoops = */ 1,
-		/* .whileLoops = */ 1,
-		/* .doWhileLoops = */ 1,
-		/* .generalUniformIndexing = */ 1,
-		/* .generalAttributeMatrixVectorIndexing = */ 1,
-		/* .generalVaryingIndexing = */ 1,
-		/* .generalSamplerIndexing = */ 1,
-		/* .generalVariableIndexing = */ 1,
-		/* .generalConstantMatrixVectorIndexing = */ 1,
-	}
-};
 
 inline static bool
 _renoir_gl450_check()
@@ -225,28 +116,6 @@ _renoir_gl450_error_log(GLenum source,
 		_renoir_gl450_error_severtiy_string(severity),
 		message
 	);
-}
-
-inline static glslang_stage_t
-_renoir_shader_to_glslang(RENOIR_SHADER shader)
-{
-	glslang_stage_t res = GLSLANG_STAGE_COUNT;
-	switch(shader)
-	{
-	case RENOIR_SHADER_VERTEX:
-		res = GLSLANG_STAGE_VERTEX;
-		break;
-	case RENOIR_SHADER_PIXEL:
-		res = GLSLANG_STAGE_FRAGMENT;
-		break;
-	case RENOIR_SHADER_GEOMETRY:
-		res = GLSLANG_STAGE_GEOMETRY;
-		break;
-	default:
-		assert(false && "unreachable");
-		break;
-	}
-	return res;
 }
 
 inline static GLenum
@@ -2955,68 +2824,6 @@ _renoir_gl450_texture_size(Renoir* api, Renoir_Texture texture)
 	return h->texture.size;
 }
 
-static bool
-_renoir_gl450_program_check(Renoir* api,
-	RENOIR_SHADER stage,
-	const char* bytes,
-	size_t bytes_size,
-	char* error,
-	size_t error_size)
-{
-	glslang_shader_t* shader = nullptr;
-	glslang_program_t* program = nullptr;
-
-	glslang_input_t input{};
-	input.language = GLSLANG_SOURCE_GLSL;
-	input.stage = _renoir_shader_to_glslang(stage);
-	input.client = GLSLANG_CLIENT_OPENGL;
-	input.client_version = GLSLANG_TARGET_OPENGL_450;
-	input.code = bytes;
-	input.default_version = 450;
-	input.default_profile = GLSLANG_CORE_PROFILE;
-	input.messages = GLSLANG_MSG_DEFAULT_BIT;
-	input.resource = (glslang_resource_t*)&DefaultTBuiltInResource;
-
-	if (glslang_initialize_process() == false)
-		return false;
-
-	shader = glslang_shader_create(&input);
-	if (glslang_shader_preprocess(shader, &input) == false)
-		goto error;
-
-	if (glslang_shader_parse(shader, &input) == false)
-		goto error;
-
-	program = glslang_program_create();
-	glslang_program_add_shader(program, shader);
-	if (glslang_program_link(program, GLSLANG_MSG_DEFAULT_BIT) == false)
-		goto error;
-
-	glslang_shader_delete(shader);
-	glslang_program_delete(program);
-	return true;
-
-error:
-	const char* log = glslang_shader_get_info_log(shader);
-	if (error)
-	{
-		size_t len = ::strlen(log);
-		len = len < error_size ? len : error_size;
-		if (len > 0)
-		{
-			::memcpy(error, log, len - 1);
-			error[len - 1] = 0;
-		}
-	}
-	else
-	{
-		mn::log_error("{}", log);
-	}
-	if (shader) glslang_shader_delete(shader);
-	if (program) glslang_program_delete(program);
-	return false;
-}
-
 static Renoir_Program
 _renoir_gl450_program_new(Renoir* api, Renoir_Program_Desc desc)
 {
@@ -3782,7 +3589,6 @@ _renoir_load_api(Renoir* api)
 	api->texture_native_handle = _renoir_gl450_texture_native_handle;
 	api->texture_size = _renoir_gl450_texture_size;
 
-	api->program_check = _renoir_gl450_program_check;
 	api->program_new = _renoir_gl450_program_new;
 	api->program_free = _renoir_gl450_program_free;
 

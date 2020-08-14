@@ -351,7 +351,6 @@ typedef struct Renoir
 	void* (*texture_native_handle)(struct Renoir* api, Renoir_Texture texture);
 	Renoir_Size (*texture_size)(struct Renoir* api, Renoir_Texture texutre);
 
-	bool (*program_check)(struct Renoir* api, RENOIR_SHADER stage, const char* bytes, size_t bytes_size, char* error, size_t error_size);
 	Renoir_Program (*program_new)(struct Renoir* api, Renoir_Program_Desc desc);
 	void (*program_free)(struct Renoir* api, Renoir_Program program);
 

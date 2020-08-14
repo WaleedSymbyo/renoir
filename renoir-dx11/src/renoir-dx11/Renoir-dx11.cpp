@@ -3165,77 +3165,6 @@ _renoir_dx11_texture_size(Renoir* api, Renoir_Texture texture)
 	return h->texture.size;
 }
 
-static bool
-_renoir_dx11_program_check(Renoir* api,
-	RENOIR_SHADER stage,
-	const char* bytes,
-	size_t bytes_size,
-	char* error,
-	size_t error_size)
-{
-	ID3D10Blob* shader_blob = nullptr;
-	ID3D10Blob* error_blob = nullptr;
-	mn_defer({
-		if (error_blob) error_blob->Release();
-		if (shader_blob) shader_blob->Release();
-	});
-
-	const char* target = "";
-	switch(stage)
-	{
-	case RENOIR_SHADER_VERTEX:
-		target = "vs_5_0";
-		break;
-	case RENOIR_SHADER_PIXEL:
-		target = "ps_5_0";
-		break;
-	case RENOIR_SHADER_GEOMETRY:
-		target = "gs_5_0";
-		break;
-	case RENOIR_SHADER_COMPUTE:
-		target = "cs_5_0";
-		break;
-	default:
-		assert(false && "unreachable");
-		break;
-	}
-
-	auto res = D3DCompile(bytes, bytes_size, NULL, NULL, NULL, "main", target, 0, 0, &shader_blob, &error_blob);
-	if (FAILED(res))
-	{
-		if (error_size > 0)
-		{
-			auto blob_error_size = error_blob->GetBufferSize();
-			auto size = blob_error_size > error_size ? error_size : blob_error_size;
-			::memcpy(error, error_blob->GetBufferPointer(), size - 1);
-			error[size] = '\0';
-		}
-		return false;
-	}
-
-	if (stage == RENOIR_SHADER_VERTEX)
-	{
-		ID3D11ShaderReflection* reflection = nullptr;
-		res = D3DReflect(
-			shader_blob->GetBufferPointer(),
-			shader_blob->GetBufferSize(),
-			__uuidof(ID3D11ShaderReflection),
-			(void**)&reflection
-		);
-		if (FAILED(res))
-			return false;
-
-		D3D11_SHADER_DESC shader_desc{};
-		res = reflection->GetDesc(&shader_desc);
-		if (FAILED(res))
-			return false;
-
-		if (shader_desc.InputParameters >= RENOIR_CONSTANT_DRAW_VERTEX_BUFFER_SIZE)
-			return false;
-	}
-	return true;
-}
-
 static Renoir_Program
 _renoir_dx11_program_new(Renoir* api, Renoir_Program_Desc desc)
 {
@@ -3998,7 +3927,6 @@ _renoir_load_api(Renoir* api)
 	api->texture_native_handle = _renoir_dx11_texture_native_handle;
 	api->texture_size = _renoir_dx11_texture_size;
 
-	api->program_check = _renoir_dx11_program_check;
 	api->program_new = _renoir_dx11_program_new;
 	api->program_free = _renoir_dx11_program_free;
 

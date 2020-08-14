@@ -46,9 +46,6 @@ endif()
 add_library(MoustaphaSaad::renoir-gl450 ALIAS renoir-gl450)
 
 target_link_libraries(renoir-gl450
-	PUBLIC
-		SPIRV
-		glslang
 	PRIVATE
 		renoir-glew
 		mn
