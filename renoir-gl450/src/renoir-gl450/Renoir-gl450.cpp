@@ -2311,7 +2311,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			auto gl_format = _renoir_pixelformat_to_gl_compute(h->texture.pixel_format);
 			auto gl_gpu_access = _renoir_access_to_gl(command->texture_bind.gpu_access);
 
-			glActiveTexture(GL_TEXTURE0 + command->texture_bind.slot);
 			glBindImageTexture(
 				command->texture_bind.slot,
 				h->texture.id,
@@ -2324,7 +2323,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		}
 		else
 		{
-			glActiveTexture(GL_TEXTURE0 + command->texture_bind.slot);
 			if (h->texture.size.height == 0 && h->texture.size.depth == 0)
 			{
 				// 1D texture
@@ -3513,14 +3511,12 @@ _renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture
 	auto htex = (Renoir_Handle*)texture.handle;
 
 	mn::mutex_lock(self->mtx);
-	auto sampler = _renoir_gl450_sampler_get(self, htex->texture.default_sampler_desc);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
 	mn::mutex_unlock(self->mtx);
 
 	command->texture_bind.handle = htex;
 	command->texture_bind.shader = RENOIR_SHADER_COMPUTE;
 	command->texture_bind.slot = slot;
-	command->texture_bind.sampler = sampler;
 	command->texture_bind.gpu_access = gpu_access;
 
 	_renoir_gl450_command_push(&h->compute_pass, command);
