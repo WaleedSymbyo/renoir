@@ -3087,6 +3087,14 @@ _renoir_gl450_pass_size(Renoir* api, Renoir_Pass pass)
 	return res;
 }
 
+static Renoir_Pass_Offscreen_Desc
+_renoir_gl450_pass_offscreen_desc(Renoir* api, Renoir_Pass pass)
+{
+	auto h = (Renoir_Handle*)pass.handle;
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+	return h->raster_pass.offscreen;
+}
+
 // Graphics Commands
 static void
 _renoir_gl450_pass_begin(Renoir* api, Renoir_Pass pass)
@@ -3599,6 +3607,7 @@ _renoir_load_api(Renoir* api)
 	api->pass_compute_new = _renoir_gl450_pass_compute_new;
 	api->pass_free = _renoir_gl450_pass_free;
 	api->pass_size = _renoir_gl450_pass_size;
+	api->pass_offscreen_desc = _renoir_gl450_pass_offscreen_desc;
 
 	api->pass_begin = _renoir_gl450_pass_begin;
 	api->pass_end = _renoir_gl450_pass_end;
