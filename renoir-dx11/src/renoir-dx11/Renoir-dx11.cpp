@@ -1295,11 +1295,6 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->buffer_new.handle;
 		auto& desc = command->buffer_new.desc;
 
-		h->buffer.type = desc.type;
-		h->buffer.usage = desc.usage;
-		h->buffer.access = desc.access;
-		h->buffer.size = desc.data_size;
-
 		auto dx_buffer_type = _renoir_buffer_type_to_dx(desc.type);
 
 		D3D11_BUFFER_DESC buffer_desc{};
@@ -1382,16 +1377,6 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->texture_new.handle;
 		auto& desc = command->texture_new.desc;
-
-		h->texture.access = desc.access;
-		h->texture.pixel_format = desc.pixel_format;
-		h->texture.usage = desc.usage;
-		h->texture.size = desc.size;
-		h->texture.mipmaps = desc.mipmaps;
-		h->texture.cube_map = desc.cube_map;
-		h->texture.render_target = desc.render_target;
-		h->texture.msaa = desc.msaa;
-		h->texture.default_sampler_desc = desc.sampler;
 
 		auto dx_access = _renoir_access_to_dx(desc.access);
 		auto dx_usage = _renoir_usage_to_dx(desc.usage);
@@ -2727,6 +2712,8 @@ inline static Renoir_Handle*
 _renoir_dx11_sampler_new(IRenoir* self, Renoir_Sampler_Desc desc)
 {
 	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_SAMPLER);
+	h->sampler.desc = desc;
+
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_SAMPLER_NEW);
 	command->sampler_new.handle = h;
 	command->sampler_new.desc = desc;
@@ -3054,6 +3041,11 @@ _renoir_dx11_buffer_new(Renoir* api, Renoir_Buffer_Desc desc)
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_BUFFER);
+	h->buffer.type = desc.type;
+	h->buffer.usage = desc.usage;
+	h->buffer.access = desc.access;
+	h->buffer.size = desc.data_size;
+
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_BUFFER_NEW);
 	command->buffer_new.handle = h;
 	command->buffer_new.desc = desc;
@@ -3113,6 +3105,16 @@ _renoir_dx11_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_TEXTURE);
+	h->texture.access = desc.access;
+	h->texture.pixel_format = desc.pixel_format;
+	h->texture.usage = desc.usage;
+	h->texture.size = desc.size;
+	h->texture.mipmaps = desc.mipmaps;
+	h->texture.cube_map = desc.cube_map;
+	h->texture.render_target = desc.render_target;
+	h->texture.msaa = desc.msaa;
+	h->texture.default_sampler_desc = desc.sampler;
+
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_NEW);
 	command->texture_new.handle = h;
 	command->texture_new.desc = desc;
@@ -3722,11 +3724,19 @@ _renoir_dx11_buffer_read(Renoir* api, Renoir_Buffer buffer, size_t offset, void*
 	if (bytes_size == 0)
 		return;
 
+	auto h = (Renoir_Handle*)buffer.handle;
+	// this means that buffer creation didn't execute yet
+	if (h->buffer.buffer == nullptr)
+	{
+		::memset(bytes, 0, bytes_size);
+		return;
+	}
+
 	auto self = api->ctx;
 
 	Renoir_Command command{};
 	command.kind = RENOIR_COMMAND_KIND_BUFFER_READ;
-	command.buffer_read.handle = (Renoir_Handle*)buffer.handle;
+	command.buffer_read.handle = h;
 	command.buffer_read.offset = offset;
 	command.buffer_read.bytes = bytes;
 	command.buffer_read.bytes_size = bytes_size;
@@ -3743,11 +3753,19 @@ _renoir_dx11_texture_read(Renoir* api, Renoir_Texture texture, Renoir_Texture_Ed
 	if (desc.bytes_size == 0)
 		return;
 
+	auto h = (Renoir_Handle*)texture.handle;
+	// this means that texture creation didn't execute yet
+	if (h->texture.texture1d == nullptr || h->texture.texture2d == nullptr || h->texture.texture3d == nullptr)
+	{
+		::memset(desc.bytes, 0, desc.bytes_size);
+		return;
+	}
+
 	auto self = api->ctx;
 
 	Renoir_Command command{};
 	command.kind = RENOIR_COMMAND_KIND_TEXTURE_READ;
-	command.texture_read.handle = (Renoir_Handle*)texture.handle;
+	command.texture_read.handle = h;
 	command.texture_read.desc = desc;
 
 	mn::mutex_lock(self->mtx);
