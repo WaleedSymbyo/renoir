@@ -1383,8 +1383,6 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		auto dx_pixelformat = _renoir_pixelformat_to_dx(desc.pixel_format);
 		auto dx_pixelformat_size = _renoir_pixelformat_to_size(desc.pixel_format);
 
-		assert(desc.size.width > 0 && "a texture must have at least width");
-
 		if (desc.size.height == 0 && desc.size.depth == 0)
 		{
 			D3D11_TEXTURE1D_DESC texture_desc{};
@@ -2772,10 +2770,10 @@ _renoir_dx11_sampler_get(IRenoir* self, Renoir_Sampler_Desc desc)
 	{
 		auto res = self->sampler_cache[best_ix];
 		// reorder the cache
-		for (size_t i = 0; i + 1 < best_ix; ++i)
+		for (size_t i = 0; i < best_ix; ++i)
 		{
 			auto index = best_ix - i - 1;
-			self->sampler_cache[index] = self->sampler_cache[index - 1];
+			self->sampler_cache[index + 1] = self->sampler_cache[index];
 		}
 		self->sampler_cache[0] = res;
 		return res;
@@ -2964,6 +2962,7 @@ _renoir_dx11_swapchain_free(Renoir* api, Renoir_Swapchain swapchain)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)swapchain.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -2978,6 +2977,7 @@ _renoir_dx11_swapchain_resize(Renoir* api, Renoir_Swapchain swapchain, int width
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)swapchain.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -2994,6 +2994,7 @@ _renoir_dx11_swapchain_present(Renoir* api, Renoir_Swapchain swapchain)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)swapchain.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -3067,6 +3068,7 @@ _renoir_dx11_buffer_free(Renoir* api, Renoir_Buffer buffer)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)buffer.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -3078,6 +3080,8 @@ _renoir_dx11_buffer_free(Renoir* api, Renoir_Buffer buffer)
 static Renoir_Texture
 _renoir_dx11_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 {
+	assert(desc.size.width > 0 && "a texture must have at least width");
+
 	if (desc.usage == RENOIR_USAGE_NONE)
 		desc.usage = RENOIR_USAGE_STATIC;
 	
@@ -3139,6 +3143,7 @@ _renoir_dx11_texture_free(Renoir* api, Renoir_Texture texture)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)texture.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -3151,6 +3156,7 @@ static void*
 _renoir_dx11_texture_native_handle(Renoir* api, Renoir_Texture texture)
 {
 	auto h = (Renoir_Handle*)texture.handle;
+	assert(h != nullptr);
 	if (h->texture.texture1d)
 		return h->texture.texture1d;
 	else if (h->texture.texture2d)
@@ -3164,6 +3170,7 @@ static Renoir_Size
 _renoir_dx11_texture_size(Renoir* api, Renoir_Texture texture)
 {
 	auto h = (Renoir_Handle*)texture.handle;
+	assert(h != nullptr);
 	return h->texture.size;
 }
 
@@ -3212,6 +3219,7 @@ _renoir_dx11_program_free(Renoir* api, Renoir_Program program)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)program.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -3253,6 +3261,7 @@ _renoir_dx11_compute_free(Renoir* api, Renoir_Compute compute)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)compute.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -3311,6 +3320,7 @@ _renoir_dx11_pipeline_free(Renoir* api, Renoir_Pipeline pipeline)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pipeline.handle;
+	assert(h != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
@@ -3401,6 +3411,7 @@ _renoir_dx11_pass_free(Renoir* api, Renoir_Pass pass)
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_FREE);
 	command->pass_free.handle = h;
 	_renoir_dx11_command_process(self, command);
@@ -3411,6 +3422,7 @@ _renoir_dx11_pass_size(Renoir* api, Renoir_Pass pass)
 {
 	Renoir_Size res{};
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	// if this is an on screen/window
@@ -3432,6 +3444,7 @@ static Renoir_Pass_Offscreen_Desc
 _renoir_dx11_pass_offscreen_desc(Renoir* api, Renoir_Pass pass)
 {
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 	return h->raster_pass.offscreen;
 }
@@ -3442,6 +3455,7 @@ _renoir_dx11_pass_begin(Renoir* api, Renoir_Pass pass)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 	{
 		h->raster_pass.command_list_head = nullptr;
@@ -3477,6 +3491,7 @@ _renoir_dx11_pass_end(Renoir* api, Renoir_Pass pass)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 	{
@@ -3567,6 +3582,7 @@ _renoir_dx11_clear(Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
@@ -3583,6 +3599,7 @@ _renoir_dx11_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipelin
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
@@ -3599,6 +3616,7 @@ _renoir_dx11_use_program(Renoir* api, Renoir_Pass pass, Renoir_Program program)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
@@ -3615,6 +3633,7 @@ _renoir_dx11_use_compute(Renoir* api, Renoir_Pass pass, Renoir_Compute compute)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
 
@@ -3631,6 +3650,7 @@ _renoir_dx11_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, int
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
@@ -3654,6 +3674,7 @@ _renoir_dx11_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, s
 
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->buffer.usage != RENOIR_USAGE_STATIC);
 
@@ -3691,6 +3712,7 @@ _renoir_dx11_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->texture.usage != RENOIR_USAGE_STATIC);
 
@@ -3725,6 +3747,7 @@ _renoir_dx11_buffer_read(Renoir* api, Renoir_Buffer buffer, size_t offset, void*
 		return;
 
 	auto h = (Renoir_Handle*)buffer.handle;
+	assert(h != nullptr);
 	// this means that buffer creation didn't execute yet
 	if (h->buffer.buffer == nullptr)
 	{
@@ -3754,6 +3777,7 @@ _renoir_dx11_texture_read(Renoir* api, Renoir_Texture texture, Renoir_Texture_Ed
 		return;
 
 	auto h = (Renoir_Handle*)texture.handle;
+	assert(h != nullptr);
 	// this means that texture creation didn't execute yet
 	if (h->texture.texture1d == nullptr || h->texture.texture2d == nullptr || h->texture.texture3d == nullptr)
 	{
@@ -3778,6 +3802,7 @@ _renoir_dx11_buffer_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, RE
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
@@ -3798,10 +3823,12 @@ _renoir_dx11_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture,
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	auto htex = (Renoir_Handle*)texture.handle;
+	assert(htex != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	auto hsampler = _renoir_dx11_sampler_get(self, htex->texture.default_sampler_desc);
@@ -3821,10 +3848,12 @@ _renoir_dx11_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture 
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	auto htex = (Renoir_Handle*)texture.handle;
+	assert(htex != nullptr);
 
 	mn::mutex_lock(self->mtx);
 	auto hsampler = _renoir_dx11_sampler_get(self, sampler);
@@ -3844,6 +3873,7 @@ _renoir_dx11_buffer_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer bu
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
 	assert(
@@ -3868,6 +3898,7 @@ _renoir_dx11_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture 
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
 	assert(
@@ -3894,6 +3925,7 @@ _renoir_dx11_draw(Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
@@ -3913,6 +3945,7 @@ _renoir_dx11_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
 
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS);
 
