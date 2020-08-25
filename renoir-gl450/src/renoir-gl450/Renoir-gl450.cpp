@@ -2906,7 +2906,7 @@ _renoir_gl450_compute_new(Renoir* api, Renoir_Compute_Desc desc)
 		command->compute_new.desc.compute.bytes = (char*)mn::alloc(command->compute_new.desc.compute.size, alignof(char)).ptr;
 		::memcpy((char*)command->compute_new.desc.compute.bytes, desc.compute.bytes, desc.compute.size);
 
-		command->program_new.owns_data = true;
+		command->compute_new.owns_data = true;
 	}
 	_renoir_gl450_command_process(self, command);
 	return Renoir_Compute{h};
