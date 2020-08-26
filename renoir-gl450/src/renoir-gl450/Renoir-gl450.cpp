@@ -2949,9 +2949,9 @@ _renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 	if (desc.dst_rgb == RENOIR_BLEND_NONE)
 		desc.dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
 	if (desc.src_alpha == RENOIR_BLEND_NONE)
-		desc.src_alpha = RENOIR_BLEND_ZERO;
+		desc.src_alpha = RENOIR_BLEND_ONE;
 	if (desc.dst_alpha == RENOIR_BLEND_NONE)
-		desc.dst_alpha = RENOIR_BLEND_ONE;
+		desc.dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
 	if (desc.eq_rgb == RENOIR_BLEND_EQ_NONE)
 		desc.eq_rgb = RENOIR_BLEND_EQ_ADD;
 	if (desc.eq_alpha == RENOIR_BLEND_EQ_NONE)

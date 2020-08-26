@@ -221,8 +221,8 @@ typedef struct Renoir_Pipeline_Desc {
 	RENOIR_SWITCH blend; // default: RENOIR_SWITCH_ENABLE
 	RENOIR_BLEND src_rgb; // default: RENOIR_BLEND_SRC_ALPHA
 	RENOIR_BLEND dst_rgb; // default: RENOIR_BLEND_ONE_MINUS_SRC_ALPHA
-	RENOIR_BLEND src_alpha; // default: RENOIR_BLEND_ZERO
-	RENOIR_BLEND dst_alpha; // default: RENOIR_BLEND_ONE
+	RENOIR_BLEND src_alpha; // default: RENOIR_BLEND_ONE
+	RENOIR_BLEND dst_alpha; // default: RENOIR_BLEND_ONE_MINUS_SRC_ALPHA
 	RENOIR_BLEND_EQ eq_rgb; // default: RENOIR_BLEND_EQ_ADD
 	RENOIR_BLEND_EQ eq_alpha; // default: RENOIR_BLEND_EQ_ADD
 
