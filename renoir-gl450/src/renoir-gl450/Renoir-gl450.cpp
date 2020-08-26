@@ -9,10 +9,13 @@
 #include <mn/IO.h>
 #include <mn/OS.h>
 #include <mn/Log.h>
+#include <mn/Map.h>
+#include <mn/Debug.h>
 
 #include <GL/glew.h>
 
 #include <math.h>
+#include <stdio.h>
 
 inline static bool
 _renoir_gl450_check()
@@ -679,6 +682,41 @@ _renoir_access_to_gl(RENOIR_ACCESS a)
 	return res;
 }
 
+inline static const char*
+_renoir_handle_kind_name(RENOIR_HANDLE_KIND kind)
+{
+	switch(kind)
+	{
+	case RENOIR_HANDLE_KIND_NONE: return "none";
+	case RENOIR_HANDLE_KIND_SWAPCHAIN: return "swapchain";
+	case RENOIR_HANDLE_KIND_RASTER_PASS: return "raster_pass";
+	case RENOIR_HANDLE_KIND_COMPUTE_PASS: return "compute_pass";
+	case RENOIR_HANDLE_KIND_BUFFER: return "buffer";
+	case RENOIR_HANDLE_KIND_TEXTURE: return "texture";
+	case RENOIR_HANDLE_KIND_SAMPLER: return "sampler";
+	case RENOIR_HANDLE_KIND_PROGRAM: return "program";
+	case RENOIR_HANDLE_KIND_COMPUTE: return "compute";
+	case RENOIR_HANDLE_KIND_PIPELINE: return "pipeline";
+	default: assert(false && "invalid handle kind"); return "<INVALID>";
+	}
+}
+
+inline static bool
+_renoir_handle_kind_should_track(RENOIR_HANDLE_KIND kind)
+{
+	return (kind == RENOIR_HANDLE_KIND_NONE ||
+			kind == RENOIR_HANDLE_KIND_SWAPCHAIN ||
+			kind == RENOIR_HANDLE_KIND_RASTER_PASS ||
+			kind == RENOIR_HANDLE_KIND_COMPUTE_PASS ||
+			kind == RENOIR_HANDLE_KIND_BUFFER ||
+			kind == RENOIR_HANDLE_KIND_TEXTURE ||
+			// we ignore the samplers because they are cached not user created
+			// kind == RENOIR_HANDLE_KIND_SAMPLER ||
+			kind == RENOIR_HANDLE_KIND_PROGRAM ||
+			kind == RENOIR_HANDLE_KIND_COMPUTE ||
+			kind == RENOIR_HANDLE_KIND_PIPELINE);
+}
+
 
 enum RENOIR_COMMAND_KIND
 {
@@ -1013,6 +1051,12 @@ _renoir_gl450_state_reset(Renoir_GL450_State& state)
 		(GLsizei)state.last_scissor_box[3]);
 }
 
+struct Renoir_Leak_Info
+{
+	void* callstack[20];
+	size_t callstack_size;
+};
+
 struct IRenoir
 {
 	mn::Mutex mtx;
@@ -1038,6 +1082,9 @@ struct IRenoir
 	// opengl state used to prevent state leaks in case of external opengl context
 	bool glewInited;
 	Renoir_GL450_State state;
+
+	// leak detection
+	mn::Map<Renoir_Handle*, Renoir_Leak_Info> alive_handles;
 };
 
 static void
@@ -1050,12 +1097,32 @@ _renoir_gl450_handle_new(IRenoir* self, RENOIR_HANDLE_KIND kind)
 	memset(handle, 0, sizeof(*handle));
 	handle->kind = kind;
 	handle->rc = 1;
+
+	#ifdef DEBUG
+	if (_renoir_handle_kind_should_track(kind))
+	{
+		assert(mn::map_lookup(self->alive_handles, handle) == nullptr && "reuse of already alive renoir handle");
+		Renoir_Leak_Info info{};
+		#if RENOIR_LEAK
+			info.callstack_size = mn::callstack_capture(info.callstack, 20);
+		#endif
+		mn::map_insert(self->alive_handles, handle, info);
+	}
+	#endif
+
 	return handle;
 }
 
 static void
 _renoir_gl450_handle_free(IRenoir* self, Renoir_Handle* h)
 {
+	#ifdef DEBUG
+	if (_renoir_handle_kind_should_track(h->kind))
+	{
+		auto removed = mn::map_remove(self->alive_handles, h);
+		assert(removed && "free was called with an invalid renoir handle");
+	}
+	#endif
 	mn::pool_put(self->handle_pool, h);
 }
 
@@ -2538,6 +2605,7 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 	self->settings = settings;
 	self->ctx = ctx;
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
+	self->alive_handles = mn::map_new<Renoir_Handle*, Renoir_Leak_Info>();
 	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
 
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_INIT);
@@ -2552,11 +2620,25 @@ static void
 _renoir_gl450_dispose(Renoir* api)
 {
 	auto self = api->ctx;
+	#if RENOIR_LEAK
+		for(auto[handle, info]: self->alive_handles)
+		{
+			::fprintf(stderr, "renoir handle to '%s' leaked, callstack:\n", _renoir_handle_kind_name(handle->kind));
+			mn::callstack_print_to(info.callstack, info.callstack_size, mn::file_stderr());
+			::fprintf(stderr, "\n\n");
+		}
+		if (self->alive_handles.count > 0)
+			::fprintf(stderr, "renoir leak count: %zu\n", self->alive_handles.count);
+	#else
+		if (self->alive_handles.count > 0)
+			::fprintf(stderr, "renoir leak count: %zu, for callstack turn on 'RENOIR_LEAK' flag\n", self->alive_handles.count);
+	#endif
 	mn::mutex_free(self->mtx);
 	renoir_gl450_context_free(self->ctx);
 	mn::pool_free(self->handle_pool);
 	mn::pool_free(self->command_pool);
 	mn::buf_free(self->sampler_cache);
+	mn::map_free(self->alive_handles);
 	mn::free(self);
 }
 

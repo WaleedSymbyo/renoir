@@ -10,10 +10,13 @@
 #include <mn/Map.h>
 #include <mn/Str.h>
 #include <mn/Str_Intern.h>
+#include <mn/Map.h>
+#include <mn/Debug.h>
 
 #include <atomic>
 #include <assert.h>
 #include <math.h>
+#include <stdio.h>
 
 #include <d3d11.h>
 #include <d3dcommon.h>
@@ -391,6 +394,41 @@ struct Renoir_Handle
 	};
 };
 
+inline static const char*
+_renoir_handle_kind_name(RENOIR_HANDLE_KIND kind)
+{
+	switch(kind)
+	{
+	case RENOIR_HANDLE_KIND_NONE: return "none";
+	case RENOIR_HANDLE_KIND_SWAPCHAIN: return "swapchain";
+	case RENOIR_HANDLE_KIND_RASTER_PASS: return "raster_pass";
+	case RENOIR_HANDLE_KIND_COMPUTE_PASS: return "compute_pass";
+	case RENOIR_HANDLE_KIND_BUFFER: return "buffer";
+	case RENOIR_HANDLE_KIND_TEXTURE: return "texture";
+	case RENOIR_HANDLE_KIND_SAMPLER: return "sampler";
+	case RENOIR_HANDLE_KIND_PROGRAM: return "program";
+	case RENOIR_HANDLE_KIND_COMPUTE: return "compute";
+	case RENOIR_HANDLE_KIND_PIPELINE: return "pipeline";
+	default: assert(false && "invalid handle kind"); return "<INVALID>";
+	}
+}
+
+inline static bool
+_renoir_handle_kind_should_track(RENOIR_HANDLE_KIND kind)
+{
+	return (kind == RENOIR_HANDLE_KIND_NONE ||
+			kind == RENOIR_HANDLE_KIND_SWAPCHAIN ||
+			kind == RENOIR_HANDLE_KIND_RASTER_PASS ||
+			kind == RENOIR_HANDLE_KIND_COMPUTE_PASS ||
+			kind == RENOIR_HANDLE_KIND_BUFFER ||
+			kind == RENOIR_HANDLE_KIND_TEXTURE ||
+			// we ignore the samplers because they are cached not user created
+			// kind == RENOIR_HANDLE_KIND_SAMPLER ||
+			kind == RENOIR_HANDLE_KIND_PROGRAM ||
+			kind == RENOIR_HANDLE_KIND_COMPUTE ||
+			kind == RENOIR_HANDLE_KIND_PIPELINE);
+}
+
 enum RENOIR_COMMAND_KIND
 {
 	RENOIR_COMMAND_KIND_NONE,
@@ -641,6 +679,12 @@ struct Renoir_Command
 	};
 };
 
+struct Renoir_Leak_Info
+{
+	void* callstack[20];
+	size_t callstack_size;
+};
+
 struct IRenoir
 {
 	mn::Mutex mtx;
@@ -664,6 +708,9 @@ struct IRenoir
 
 	// caches
 	mn::Buf<Renoir_Handle*> sampler_cache;
+
+	// leak detection
+	mn::Map<Renoir_Handle*, Renoir_Leak_Info> alive_handles;
 };
 
 static void
@@ -676,12 +723,32 @@ _renoir_dx11_handle_new(IRenoir* self, RENOIR_HANDLE_KIND kind)
 	memset(handle, 0, sizeof(*handle));
 	handle->kind = kind;
 	handle->rc = 1;
+
+	#ifdef DEBUG
+	if (_renoir_handle_kind_should_track(kind))
+	{
+		assert(mn::map_lookup(self->alive_handles, handle) == nullptr && "reuse of already alive renoir handle");
+		Renoir_Leak_Info info{};
+		#if RENOIR_LEAK
+			info.callstack_size = mn::callstack_capture(info.callstack, 20);
+		#endif
+		mn::map_insert(self->alive_handles, handle, info);
+	}
+	#endif
+
 	return handle;
 }
 
 static void
 _renoir_dx11_handle_free(IRenoir* self, Renoir_Handle* h)
 {
+	#ifdef DEBUG
+	if (_renoir_handle_kind_should_track(h->kind))
+	{
+		auto removed = mn::map_remove(self->alive_handles, h);
+		assert(removed && "free was called with an invalid renoir handle");
+	}
+	#endif
 	mn::pool_put(self->handle_pool, h);
 }
 
@@ -2866,6 +2933,7 @@ _renoir_dx11_init(Renoir* api, Renoir_Settings settings, void*)
 	self->command_pool = mn::pool_new(sizeof(Renoir_Command), 128);
 	self->settings = settings;
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
+	self->alive_handles = mn::map_new<Renoir_Handle*, Renoir_Leak_Info>();
 	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
 
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_INIT);
@@ -2879,6 +2947,19 @@ static void
 _renoir_dx11_dispose(Renoir* api)
 {
 	auto self = api->ctx;
+	#if RENOIR_LEAK
+		for(auto[handle, info]: self->alive_handles)
+		{
+			::fprintf(stderr, "renoir handle to '%s' leaked, callstack:\n", _renoir_handle_kind_name(handle->kind));
+			mn::callstack_print_to(info.callstack, info.callstack_size, mn::file_stderr());
+			::fprintf(stderr, "\n\n");
+		}
+		if (self->alive_handles.count > 0)
+			::fprintf(stderr, "renoir leak count: %zu\n", self->alive_handles.count);
+	#else
+		if (self->alive_handles.count > 0)
+			::fprintf(stderr, "renoir leak count: %zu, for callstack turn on 'RENOIR_LEAK' flag\n", self->alive_handles.count);
+	#endif
 	mn::mutex_free(self->mtx);
 	if (self->settings.external_context == false)
 	{
@@ -2890,6 +2971,7 @@ _renoir_dx11_dispose(Renoir* api)
 	mn::pool_free(self->handle_pool);
 	mn::pool_free(self->command_pool);
 	mn::buf_free(self->sampler_cache);
+	mn::map_free(self->alive_handles);
 	mn::free(self);
 }
 

@@ -16,6 +16,7 @@ option(RENOIR_BUILD_EXAMPLES "Build example applications that showcase the renoi
 option(RENOIR_UNITY_BUILD "Combine all renoir source files into one jumbo build." ON)
 option(RENOIR_USE_LOCAL_MN "Uses the local mn submodule in renoir" ON)
 option(RENOIR_DEBUG_LAYER "Turn on debug layer in underlying graphics api" OFF)
+option(RENOIR_LEAK "Turn on leak detector for graphics resources" OFF)
 
 if (RENOIR_USE_LOCAL_MN)
 	add_subdirectory(external/mn EXCLUDE_FROM_ALL)
