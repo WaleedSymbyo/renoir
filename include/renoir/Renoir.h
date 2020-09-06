@@ -211,23 +211,33 @@ typedef struct Renoir_Settings {
 	RENOIR_VSYNC_MODE vsync; // default: RENOIR_VSYNC_MODE_ON
 } Renoir_Settings;
 
-typedef struct Renoir_Pipeline_Desc {
+typedef struct Renoir_Depth_Desc {
+	RENOIR_SWITCH depth; // default: RENOIR_SWITCH_ENABLE
+	RENOIR_SWITCH depth_write_mask; // default: RENOIR_SWITCH_ENABLE
+} Renoir_Depth_Desc;
+
+typedef struct Renoir_Rasterizer_Desc {
 	RENOIR_SWITCH cull; // default: RENOIR_SWITCH_ENABLE
 	RENOIR_FACE cull_face; // default: RENOIR_FACE_BACK
 	RENOIR_ORIENTATION cull_front; // default: RENOIR_ORIENTATION_CCW
+	RENOIR_SWITCH scissor; // default: RENOIR_SWITCH_DISABLE
+} Renoir_Rasterizer_Desc;
 
-	RENOIR_SWITCH depth; // default: RENOIR_SWITCH_ENABLE
-	RENOIR_SWITCH depth_write_mask; // default: RENOIR_SWITCH_ENABLE
-
-	RENOIR_SWITCH blend; // default: RENOIR_SWITCH_ENABLE
+typedef struct Renoir_Blend_Desc {
+	RENOIR_SWITCH enabled; // default: RENOIR_SWITCH_ENABLE
 	RENOIR_BLEND src_rgb; // default: RENOIR_BLEND_SRC_ALPHA
 	RENOIR_BLEND dst_rgb; // default: RENOIR_BLEND_ONE_MINUS_SRC_ALPHA
 	RENOIR_BLEND src_alpha; // default: RENOIR_BLEND_ONE
 	RENOIR_BLEND dst_alpha; // default: RENOIR_BLEND_ONE_MINUS_SRC_ALPHA
 	RENOIR_BLEND_EQ eq_rgb; // default: RENOIR_BLEND_EQ_ADD
 	RENOIR_BLEND_EQ eq_alpha; // default: RENOIR_BLEND_EQ_ADD
+} Renoir_Blend_Desc;
 
-	RENOIR_SWITCH scissor; // default: RENOIR_SWITCH_DISABLE
+typedef struct Renoir_Pipeline_Desc {
+	Renoir_Rasterizer_Desc rasterizer;
+	Renoir_Depth_Desc depth_stencil;
+	RENOIR_SWITCH independant_blend; // default: RENOIR_SWITCH_DISABLE
+	Renoir_Blend_Desc blend[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
 } Pipeline_Desc;
 
 typedef struct Renoir_Buffer_Desc {

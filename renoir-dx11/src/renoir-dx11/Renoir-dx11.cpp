@@ -1888,8 +1888,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 		D3D11_DEPTH_STENCIL_DESC depth_desc{};
 
-		depth_desc.DepthEnable = desc.depth == RENOIR_SWITCH_ENABLE;
-		if (desc.depth_write_mask == RENOIR_SWITCH_ENABLE)
+		depth_desc.DepthEnable = desc.depth_stencil.depth == RENOIR_SWITCH_ENABLE;
+		if (desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_ENABLE)
 			depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
 		else
 			depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
@@ -1911,9 +1911,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 		D3D11_RASTERIZER_DESC raster_desc{};
 		raster_desc.AntialiasedLineEnable = true;
-		if (desc.cull == RENOIR_SWITCH_ENABLE)
+		if (desc.rasterizer.cull == RENOIR_SWITCH_ENABLE)
 		{
-			switch(desc.cull_face)
+			switch(desc.rasterizer.cull_face)
 			{
 			case RENOIR_FACE_BACK:
 				raster_desc.CullMode = D3D11_CULL_BACK;
@@ -1936,24 +1936,29 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		raster_desc.DepthBiasClamp = 0.0f;
 		raster_desc.DepthClipEnable = true;
 		raster_desc.FillMode = D3D11_FILL_SOLID;
-		raster_desc.FrontCounterClockwise = desc.cull_front == RENOIR_ORIENTATION_CCW;
+		raster_desc.FrontCounterClockwise = desc.rasterizer.cull_front == RENOIR_ORIENTATION_CCW;
 		raster_desc.MultisampleEnable = true;
-		raster_desc.ScissorEnable = desc.scissor == RENOIR_SWITCH_ENABLE;
+		raster_desc.ScissorEnable = desc.rasterizer.scissor == RENOIR_SWITCH_ENABLE;
 		raster_desc.SlopeScaledDepthBias = 0.0f;
 		res = self->device->CreateRasterizerState(&raster_desc, &h->pipeline.raster_state);
 		assert(SUCCEEDED(res));
 
 		D3D11_BLEND_DESC blend_desc{};
 		blend_desc.AlphaToCoverageEnable = false;
-		blend_desc.IndependentBlendEnable = false;
-		blend_desc.RenderTarget[0].BlendEnable = desc.blend == RENOIR_SWITCH_ENABLE;
-		blend_desc.RenderTarget[0].SrcBlend = _renoir_blend_to_dx(desc.src_rgb);
-		blend_desc.RenderTarget[0].DestBlend = _renoir_blend_to_dx(desc.dst_rgb);
-		blend_desc.RenderTarget[0].BlendOp = _renoir_blend_eq_to_dx(desc.eq_rgb);
-		blend_desc.RenderTarget[0].SrcBlendAlpha = _renoir_blend_to_dx(desc.src_alpha);
-		blend_desc.RenderTarget[0].DestBlendAlpha = _renoir_blend_to_dx(desc.dst_alpha);
-		blend_desc.RenderTarget[0].BlendOpAlpha = _renoir_blend_eq_to_dx(desc.eq_alpha);
-		blend_desc.RenderTarget[0].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+		blend_desc.IndependentBlendEnable = desc.independant_blend == RENOIR_SWITCH_ENABLE;
+		for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+		{
+			blend_desc.RenderTarget[i].BlendEnable = desc.blend[i].enabled == RENOIR_SWITCH_ENABLE;
+			blend_desc.RenderTarget[i].SrcBlend = _renoir_blend_to_dx(desc.blend[i].src_rgb);
+			blend_desc.RenderTarget[i].DestBlend = _renoir_blend_to_dx(desc.blend[i].dst_rgb);
+			blend_desc.RenderTarget[i].BlendOp = _renoir_blend_eq_to_dx(desc.blend[i].eq_rgb);
+			blend_desc.RenderTarget[i].SrcBlendAlpha = _renoir_blend_to_dx(desc.blend[i].src_alpha);
+			blend_desc.RenderTarget[i].DestBlendAlpha = _renoir_blend_to_dx(desc.blend[i].dst_alpha);
+			blend_desc.RenderTarget[i].BlendOpAlpha = _renoir_blend_eq_to_dx(desc.blend[i].eq_alpha);
+			blend_desc.RenderTarget[i].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+			if (desc.independant_blend == RENOIR_SWITCH_DISABLE)
+				break;
+		}
 		res = self->device->CreateBlendState(&blend_desc, &h->pipeline.blend_state);
 		assert(SUCCEEDED(res));
 		break;
@@ -3361,35 +3366,43 @@ _renoir_dx11_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 {
 	auto self = api->ctx;
 
-	if (desc.cull == RENOIR_SWITCH_DEFAULT)
-		desc.cull = RENOIR_SWITCH_ENABLE;
-	if (desc.cull_face == RENOIR_FACE_NONE)
-		desc.cull_face = RENOIR_FACE_BACK;
-	if (desc.cull_front == RENOIR_ORIENTATION_NONE)
-		desc.cull_front = RENOIR_ORIENTATION_CCW;
+	if (desc.rasterizer.cull == RENOIR_SWITCH_DEFAULT)
+		desc.rasterizer.cull = RENOIR_SWITCH_ENABLE;
+	if (desc.rasterizer.cull_face == RENOIR_FACE_NONE)
+		desc.rasterizer.cull_face = RENOIR_FACE_BACK;
+	if (desc.rasterizer.cull_front == RENOIR_ORIENTATION_NONE)
+		desc.rasterizer.cull_front = RENOIR_ORIENTATION_CCW;
+	if (desc.rasterizer.scissor == RENOIR_SWITCH_DEFAULT)
+		desc.rasterizer.scissor = RENOIR_SWITCH_DISABLE;
 
-	if (desc.depth == RENOIR_SWITCH_DEFAULT)
-		desc.depth = RENOIR_SWITCH_ENABLE;
-	if (desc.depth_write_mask == RENOIR_SWITCH_DEFAULT)
-		desc.depth_write_mask = RENOIR_SWITCH_ENABLE;
+	if (desc.depth_stencil.depth == RENOIR_SWITCH_DEFAULT)
+		desc.depth_stencil.depth = RENOIR_SWITCH_ENABLE;
+	if (desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
+		desc.depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
-	if (desc.blend == RENOIR_SWITCH_DEFAULT)
-		desc.blend = RENOIR_SWITCH_ENABLE;
-	if (desc.src_rgb == RENOIR_BLEND_NONE)
-		desc.src_rgb = RENOIR_BLEND_SRC_ALPHA;
-	if (desc.dst_rgb == RENOIR_BLEND_NONE)
-		desc.dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-	if (desc.src_alpha == RENOIR_BLEND_NONE)
-		desc.src_alpha = RENOIR_BLEND_ONE;
-	if (desc.dst_alpha == RENOIR_BLEND_NONE)
-		desc.dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-	if (desc.eq_rgb == RENOIR_BLEND_EQ_NONE)
-		desc.eq_rgb = RENOIR_BLEND_EQ_ADD;
-	if (desc.eq_alpha == RENOIR_BLEND_EQ_NONE)
-		desc.eq_alpha = RENOIR_BLEND_EQ_ADD;
+	if (desc.independant_blend == RENOIR_SWITCH_DEFAULT)
+		desc.independant_blend = RENOIR_SWITCH_DISABLE;
 
-	if (desc.scissor == RENOIR_SWITCH_DEFAULT)
-		desc.scissor = RENOIR_SWITCH_DISABLE;
+	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+	{
+		if (desc.blend[i].enabled == RENOIR_SWITCH_DEFAULT)
+			desc.blend[i].enabled = RENOIR_SWITCH_ENABLE;
+		if (desc.blend[i].src_rgb == RENOIR_BLEND_NONE)
+			desc.blend[i].src_rgb = RENOIR_BLEND_SRC_ALPHA;
+		if (desc.blend[i].dst_rgb == RENOIR_BLEND_NONE)
+			desc.blend[i].dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc.blend[i].src_alpha == RENOIR_BLEND_NONE)
+			desc.blend[i].src_alpha = RENOIR_BLEND_ONE;
+		if (desc.blend[i].dst_alpha == RENOIR_BLEND_NONE)
+			desc.blend[i].dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc.blend[i].eq_rgb == RENOIR_BLEND_EQ_NONE)
+			desc.blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
+		if (desc.blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
+			desc.blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
+		
+		if (desc.independant_blend == RENOIR_SWITCH_DISABLE)
+			break;
+	}
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));

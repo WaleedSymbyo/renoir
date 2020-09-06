@@ -2077,10 +2077,10 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		self->current_pipeline = command->use_pipeline.pipeline;
 
 		auto h = self->current_pipeline;
-		if (h->pipeline.desc.cull == RENOIR_SWITCH_ENABLE)
+		if (h->pipeline.desc.rasterizer.cull == RENOIR_SWITCH_ENABLE)
 		{
-			auto gl_face = _renoir_face_to_gl(h->pipeline.desc.cull_face);
-			auto gl_orientation = _renoir_orientation_to_gl(h->pipeline.desc.cull_front);
+			auto gl_face = _renoir_face_to_gl(h->pipeline.desc.rasterizer.cull_face);
+			auto gl_orientation = _renoir_orientation_to_gl(h->pipeline.desc.rasterizer.cull_front);
 			glEnable(GL_CULL_FACE);
 			glCullFace(gl_face);
 			glFrontFace(gl_orientation);
@@ -2090,43 +2090,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glDisable(GL_CULL_FACE);
 		}
 
-		if (h->pipeline.desc.blend == RENOIR_SWITCH_ENABLE)
-		{
-			auto gl_src_rgb = _renoir_blend_to_gl(h->pipeline.desc.src_rgb);
-			auto gl_dst_rgb = _renoir_blend_to_gl(h->pipeline.desc.dst_rgb);
-			auto gl_src_alpha = _renoir_blend_to_gl(h->pipeline.desc.src_alpha);
-			auto gl_dst_alpha = _renoir_blend_to_gl(h->pipeline.desc.dst_alpha);
-			auto gl_blend_eq_rgb = _renoir_blend_eq_to_gl(h->pipeline.desc.eq_rgb);
-			auto gl_blend_eq_alpha = _renoir_blend_eq_to_gl(h->pipeline.desc.eq_alpha);
-			glEnable(GL_BLEND);
-			glBlendFuncSeparate(gl_src_rgb, gl_dst_rgb, gl_src_alpha, gl_dst_alpha);
-			glBlendEquationSeparate(gl_blend_eq_rgb, gl_blend_eq_alpha);
-		}
-		else
-		{
-			glDisable(GL_BLEND);
-		}
-
-		if (h->pipeline.desc.depth == RENOIR_SWITCH_ENABLE)
-		{
-			glEnable(GL_DEPTH_TEST);
-			glDepthRange(0.0, 1.0);
-		}
-		else
-		{
-			glDisable(GL_DEPTH_TEST);
-		}
-
-		if (h->pipeline.desc.depth_write_mask == RENOIR_SWITCH_ENABLE)
-		{
-			glDepthMask(GL_TRUE);
-		}
-		else
-		{
-			glDepthMask(GL_FALSE);
-		}
-
-		switch (h->pipeline.desc.scissor)
+		switch (h->pipeline.desc.rasterizer.scissor)
 		{
 		case RENOIR_SWITCH_ENABLE:
 			glEnable(GL_SCISSOR_TEST);
@@ -2137,6 +2101,64 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		default:
 			assert(false && "unreachable");
 			break;
+		}
+
+		if (h->pipeline.desc.depth_stencil.depth == RENOIR_SWITCH_ENABLE)
+		{
+			glEnable(GL_DEPTH_TEST);
+			glDepthRange(0.0, 1.0);
+		}
+		else
+		{
+			glDisable(GL_DEPTH_TEST);
+		}
+
+		if (h->pipeline.desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_ENABLE)
+		{
+			glDepthMask(GL_TRUE);
+		}
+		else
+		{
+			glDepthMask(GL_FALSE);
+		}
+
+		for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+		{
+			if (h->pipeline.desc.blend[i].enabled == RENOIR_SWITCH_ENABLE)
+			{
+				auto gl_src_rgb = _renoir_blend_to_gl(h->pipeline.desc.blend[i].src_rgb);
+				auto gl_dst_rgb = _renoir_blend_to_gl(h->pipeline.desc.blend[i].dst_rgb);
+				auto gl_src_alpha = _renoir_blend_to_gl(h->pipeline.desc.blend[i].src_alpha);
+				auto gl_dst_alpha = _renoir_blend_to_gl(h->pipeline.desc.blend[i].dst_alpha);
+				auto gl_blend_eq_rgb = _renoir_blend_eq_to_gl(h->pipeline.desc.blend[i].eq_rgb);
+				auto gl_blend_eq_alpha = _renoir_blend_eq_to_gl(h->pipeline.desc.blend[i].eq_alpha);
+				if (h->pipeline.desc.independant_blend == RENOIR_SWITCH_ENABLE)
+				{
+					glEnablei(GL_BLEND, i);
+					glBlendFuncSeparatei(i, gl_src_rgb, gl_dst_rgb, gl_src_alpha, gl_dst_alpha);
+					glBlendEquationSeparatei(i, gl_blend_eq_rgb, gl_blend_eq_alpha);
+				}
+				else
+				{
+					glEnable(GL_BLEND);
+					glBlendFuncSeparate(gl_src_rgb, gl_dst_rgb, gl_src_alpha, gl_dst_alpha);
+					glBlendEquationSeparate(gl_blend_eq_rgb, gl_blend_eq_alpha);
+				}
+			}
+			else
+			{
+				if (h->pipeline.desc.independant_blend == RENOIR_SWITCH_ENABLE)
+				{
+					glDisablei(GL_BLEND, i);
+				}
+				else
+				{
+					glDisable(GL_BLEND);
+				}
+			}
+
+			if (h->pipeline.desc.independant_blend == RENOIR_SWITCH_DISABLE)
+				break;
 		}
 
 		assert(_renoir_gl450_check());
@@ -3029,35 +3051,43 @@ _renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 {
 	auto self = api->ctx;
 
-	if (desc.cull == RENOIR_SWITCH_DEFAULT)
-		desc.cull = RENOIR_SWITCH_ENABLE;
-	if (desc.cull_face == RENOIR_FACE_NONE)
-		desc.cull_face = RENOIR_FACE_BACK;
-	if (desc.cull_front == RENOIR_ORIENTATION_NONE)
-		desc.cull_front = RENOIR_ORIENTATION_CCW;
+	if (desc.rasterizer.cull == RENOIR_SWITCH_DEFAULT)
+		desc.rasterizer.cull = RENOIR_SWITCH_ENABLE;
+	if (desc.rasterizer.cull_face == RENOIR_FACE_NONE)
+		desc.rasterizer.cull_face = RENOIR_FACE_BACK;
+	if (desc.rasterizer.cull_front == RENOIR_ORIENTATION_NONE)
+		desc.rasterizer.cull_front = RENOIR_ORIENTATION_CCW;
+	if (desc.rasterizer.scissor == RENOIR_SWITCH_DEFAULT)
+		desc.rasterizer.scissor = RENOIR_SWITCH_DISABLE;
 
-	if (desc.depth == RENOIR_SWITCH_DEFAULT)
-		desc.depth = RENOIR_SWITCH_ENABLE;
-	if (desc.depth_write_mask == RENOIR_SWITCH_DEFAULT)
-		desc.depth_write_mask = RENOIR_SWITCH_ENABLE;
+	if (desc.depth_stencil.depth == RENOIR_SWITCH_DEFAULT)
+		desc.depth_stencil.depth = RENOIR_SWITCH_ENABLE;
+	if (desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
+		desc.depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
-	if (desc.blend == RENOIR_SWITCH_DEFAULT)
-		desc.blend = RENOIR_SWITCH_ENABLE;
-	if (desc.src_rgb == RENOIR_BLEND_NONE)
-		desc.src_rgb = RENOIR_BLEND_SRC_ALPHA;
-	if (desc.dst_rgb == RENOIR_BLEND_NONE)
-		desc.dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-	if (desc.src_alpha == RENOIR_BLEND_NONE)
-		desc.src_alpha = RENOIR_BLEND_ONE;
-	if (desc.dst_alpha == RENOIR_BLEND_NONE)
-		desc.dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-	if (desc.eq_rgb == RENOIR_BLEND_EQ_NONE)
-		desc.eq_rgb = RENOIR_BLEND_EQ_ADD;
-	if (desc.eq_alpha == RENOIR_BLEND_EQ_NONE)
-		desc.eq_alpha = RENOIR_BLEND_EQ_ADD;
+	if (desc.independant_blend == RENOIR_SWITCH_DEFAULT)
+		desc.independant_blend = RENOIR_SWITCH_DISABLE;
 
-	if (desc.scissor == RENOIR_SWITCH_DEFAULT)
-		desc.scissor = RENOIR_SWITCH_DISABLE;
+	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+	{
+		if (desc.blend[i].enabled == RENOIR_SWITCH_DEFAULT)
+			desc.blend[i].enabled = RENOIR_SWITCH_ENABLE;
+		if (desc.blend[i].src_rgb == RENOIR_BLEND_NONE)
+			desc.blend[i].src_rgb = RENOIR_BLEND_SRC_ALPHA;
+		if (desc.blend[i].dst_rgb == RENOIR_BLEND_NONE)
+			desc.blend[i].dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc.blend[i].src_alpha == RENOIR_BLEND_NONE)
+			desc.blend[i].src_alpha = RENOIR_BLEND_ONE;
+		if (desc.blend[i].dst_alpha == RENOIR_BLEND_NONE)
+			desc.blend[i].dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc.blend[i].eq_rgb == RENOIR_BLEND_EQ_NONE)
+			desc.blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
+		if (desc.blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
+			desc.blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
+		
+		if (desc.independant_blend == RENOIR_SWITCH_DISABLE)
+			break;
+	}
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
