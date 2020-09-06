@@ -217,6 +217,7 @@ typedef struct Renoir_Pipeline_Desc {
 	RENOIR_ORIENTATION cull_front; // default: RENOIR_ORIENTATION_CCW
 
 	RENOIR_SWITCH depth; // default: RENOIR_SWITCH_ENABLE
+	RENOIR_SWITCH depth_write_mask; // default: RENOIR_SWITCH_ENABLE
 
 	RENOIR_SWITCH blend; // default: RENOIR_SWITCH_ENABLE
 	RENOIR_BLEND src_rgb; // default: RENOIR_BLEND_SRC_ALPHA

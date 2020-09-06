@@ -1889,7 +1889,10 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		D3D11_DEPTH_STENCIL_DESC depth_desc{};
 
 		depth_desc.DepthEnable = desc.depth == RENOIR_SWITCH_ENABLE;
-		depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		if (desc.depth_write_mask == RENOIR_SWITCH_ENABLE)
+			depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ALL;
+		else
+			depth_desc.DepthWriteMask = D3D11_DEPTH_WRITE_MASK_ZERO;
 		depth_desc.DepthFunc = D3D11_COMPARISON_LESS;
 
 		depth_desc.StencilEnable = false;
@@ -3367,6 +3370,8 @@ _renoir_dx11_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 
 	if (desc.depth == RENOIR_SWITCH_DEFAULT)
 		desc.depth = RENOIR_SWITCH_ENABLE;
+	if (desc.depth_write_mask == RENOIR_SWITCH_DEFAULT)
+		desc.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
 	if (desc.blend == RENOIR_SWITCH_DEFAULT)
 		desc.blend = RENOIR_SWITCH_ENABLE;

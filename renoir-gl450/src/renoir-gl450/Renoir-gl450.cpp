@@ -975,6 +975,7 @@ struct Renoir_GL450_State
 	GLboolean last_enable_blend;
 	GLboolean last_enable_cull_face;
 	GLboolean last_enable_depth_test;
+	GLboolean last_enable_depth_write_mask;
 	GLboolean last_enable_scissor_test;
 	GLint last_program;
 	GLint last_texture;
@@ -1002,6 +1003,7 @@ _renoir_gl450_state_capture(Renoir_GL450_State& state)
 	glGetIntegerv(GL_BLEND_EQUATION_ALPHA, (GLint *)&state.last_blend_equation_alpha);
 	glGetIntegerv(GL_SAMPLER_BINDING, &state.last_sampler);
 	glGetIntegerv(GL_POLYGON_MODE, state.last_polygon_mode);
+	glGetBooleanv(GL_DEPTH_WRITEMASK, &state.last_enable_depth_write_mask);
 	state.last_enable_blend		= glIsEnabled(GL_BLEND);
 	state.last_enable_cull_face	= glIsEnabled(GL_CULL_FACE);
 	state.last_enable_depth_test	= glIsEnabled(GL_DEPTH_TEST);
@@ -1035,6 +1037,10 @@ _renoir_gl450_state_reset(Renoir_GL450_State& state)
 		glEnable(GL_DEPTH_TEST);
 	else
 		glDisable(GL_DEPTH_TEST);
+	if (state.last_enable_depth_write_mask)
+		glDepthMask(GL_TRUE);
+	else
+		glDepthMask(GL_FALSE);
 	if (state.last_enable_scissor_test)
 		glEnable(GL_SCISSOR_TEST);
 	else
@@ -2111,6 +2117,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glDisable(GL_DEPTH_TEST);
 		}
 
+		if (h->pipeline.desc.depth_write_mask == RENOIR_SWITCH_ENABLE)
+		{
+			glDepthMask(GL_TRUE);
+		}
+		else
+		{
+			glDepthMask(GL_FALSE);
+		}
+
 		switch (h->pipeline.desc.scissor)
 		{
 		case RENOIR_SWITCH_ENABLE:
@@ -3023,6 +3038,8 @@ _renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 
 	if (desc.depth == RENOIR_SWITCH_DEFAULT)
 		desc.depth = RENOIR_SWITCH_ENABLE;
+	if (desc.depth_write_mask == RENOIR_SWITCH_DEFAULT)
+		desc.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
 	if (desc.blend == RENOIR_SWITCH_DEFAULT)
 		desc.blend = RENOIR_SWITCH_ENABLE;
