@@ -236,7 +236,7 @@ typedef struct Renoir_Blend_Desc {
 typedef struct Renoir_Pipeline_Desc {
 	Renoir_Rasterizer_Desc rasterizer;
 	Renoir_Depth_Desc depth_stencil;
-	RENOIR_SWITCH independant_blend; // default: RENOIR_SWITCH_DISABLE
+	RENOIR_SWITCH independent_blend; // default: RENOIR_SWITCH_DISABLE
 	Renoir_Blend_Desc blend[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
 } Pipeline_Desc;
 
@@ -292,7 +292,8 @@ typedef struct Renoir_Compute_Desc {
 
 typedef struct Renoir_Clear_Desc {
 	RENOIR_CLEAR flags; // default: RENOIR_CLEAR_COLOR
-	Renoir_Color color;
+	RENOIR_SWITCH independent_clear_color; // default: RENOIR_SWITCH_DISABLE
+	Renoir_Color color[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
 	float depth;
 	uint8_t stencil;
 } Renoir_Clear_Desc;

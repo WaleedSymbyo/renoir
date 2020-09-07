@@ -1079,6 +1079,7 @@ struct IRenoir
 	Renoir_Handle* current_pipeline;
 	Renoir_Handle* current_program;
 	Renoir_Handle* current_compute;
+	Renoir_Handle* current_pass;
 
 	// caches
 	GLuint vao;
@@ -1346,12 +1347,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		int msaa = -1;
 		
 		glCreateFramebuffers(1, &h->raster_pass.fb);
+		GLenum attachments[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE] = {};
+		int attachments_count = 0;
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 			assert(color->texture.render_target);
+			attachments[attachments_count++] = GL_COLOR_ATTACHMENT0 + i;
 
 			_renoir_gl450_handle_ref(color);
 			if (color->texture.cube_map == false)
@@ -1412,6 +1416,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(msaa == color->texture.msaa);
 			}
 		}
+		glNamedFramebufferDrawBuffers(h->raster_pass.fb, attachments_count, attachments);
 		assert(_renoir_gl450_check());
 
 		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
@@ -1930,6 +1935,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				glBindFramebuffer(GL_FRAMEBUFFER, NULL);
 				glViewport(0, 0, swapchain->swapchain.width, swapchain->swapchain.height);
 				glDisable(GL_SCISSOR_TEST);
+				self->current_pass = h;
 			}
 			// this is an off screen
 			else if (h->raster_pass.fb != 0)
@@ -1937,6 +1943,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				glBindFramebuffer(GL_FRAMEBUFFER, h->raster_pass.fb);
 				glViewport(0, 0, h->raster_pass.width, h->raster_pass.height);
 				glDisable(GL_SCISSOR_TEST);
+				self->current_pass = h;
 			}
 			else
 			{
@@ -1946,6 +1953,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
 		{
 			// do nothing
+			self->current_pass = h;
 		}
 		else
 		{
@@ -2043,21 +2051,48 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			assert(false && "invalid pass");
 		}
+		self->current_pass = nullptr;
 		assert(_renoir_gl450_check());
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
 	{
+		auto& desc = command->pass_clear.desc;
+
 		GLbitfield clear_bits = 0;
-		if (command->pass_clear.desc.flags & RENOIR_CLEAR_COLOR)
+		if (desc.flags & RENOIR_CLEAR_COLOR)
 		{
-			glClearColor(
-				command->pass_clear.desc.color.r,
-				command->pass_clear.desc.color.g,
-				command->pass_clear.desc.color.b,
-				command->pass_clear.desc.color.a
-			);
-			clear_bits |= GL_COLOR_BUFFER_BIT;
+			if (desc.independent_clear_color == RENOIR_SWITCH_DISABLE)
+			{
+				glClearColor(
+					desc.color[0].r,
+					desc.color[0].g,
+					desc.color[0].b,
+					desc.color[0].a
+				);
+				clear_bits |= GL_COLOR_BUFFER_BIT;
+			}
+			else
+			{
+				auto pass = self->current_pass;
+				for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+				{
+					// swapchain passes can only have one color target
+					if (pass->raster_pass.swapchain)
+					{
+						if (i > 0)
+							break;
+					}
+					// offscreen passes can have multiple color targets but we have to make sure that this target exists
+					else
+					{
+						if (pass->raster_pass.offscreen.color[i].texture.handle == nullptr)
+							continue;
+					}
+
+					glClearBufferfv(GL_COLOR, i, &desc.color[i].r);
+				}
+			}
 		}
 
 		if (command->pass_clear.desc.flags & RENOIR_CLEAR_DEPTH)
@@ -2067,7 +2102,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			clear_bits |= GL_DEPTH_BUFFER_BIT;
 			clear_bits |= GL_STENCIL_BUFFER_BIT;
 		}
-
 		glClear(clear_bits);
 		assert(_renoir_gl450_check());
 		break;
@@ -2132,7 +2166,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				auto gl_dst_alpha = _renoir_blend_to_gl(h->pipeline.desc.blend[i].dst_alpha);
 				auto gl_blend_eq_rgb = _renoir_blend_eq_to_gl(h->pipeline.desc.blend[i].eq_rgb);
 				auto gl_blend_eq_alpha = _renoir_blend_eq_to_gl(h->pipeline.desc.blend[i].eq_alpha);
-				if (h->pipeline.desc.independant_blend == RENOIR_SWITCH_ENABLE)
+				if (h->pipeline.desc.independent_blend == RENOIR_SWITCH_ENABLE)
 				{
 					glEnablei(GL_BLEND, i);
 					glBlendFuncSeparatei(i, gl_src_rgb, gl_dst_rgb, gl_src_alpha, gl_dst_alpha);
@@ -2147,7 +2181,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 			else
 			{
-				if (h->pipeline.desc.independant_blend == RENOIR_SWITCH_ENABLE)
+				if (h->pipeline.desc.independent_blend == RENOIR_SWITCH_ENABLE)
 				{
 					glDisablei(GL_BLEND, i);
 				}
@@ -2157,7 +2191,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 			}
 
-			if (h->pipeline.desc.independant_blend == RENOIR_SWITCH_DISABLE)
+			if (h->pipeline.desc.independent_blend == RENOIR_SWITCH_DISABLE)
 				break;
 		}
 
@@ -3065,8 +3099,8 @@ _renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 	if (desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
 		desc.depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
-	if (desc.independant_blend == RENOIR_SWITCH_DEFAULT)
-		desc.independant_blend = RENOIR_SWITCH_DISABLE;
+	if (desc.independent_blend == RENOIR_SWITCH_DEFAULT)
+		desc.independent_blend = RENOIR_SWITCH_DISABLE;
 
 	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 	{
@@ -3085,7 +3119,7 @@ _renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 		if (desc.blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
 			desc.blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
 		
-		if (desc.independant_blend == RENOIR_SWITCH_DISABLE)
+		if (desc.independent_blend == RENOIR_SWITCH_DISABLE)
 			break;
 	}
 
@@ -3374,6 +3408,9 @@ _renoir_gl450_clear(Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc)
 	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
+	if (desc.independent_clear_color == RENOIR_SWITCH_DEFAULT)
+		desc.independent_clear_color = RENOIR_SWITCH_DISABLE;
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_CLEAR);

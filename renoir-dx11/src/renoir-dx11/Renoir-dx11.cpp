@@ -1945,7 +1945,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 		D3D11_BLEND_DESC blend_desc{};
 		blend_desc.AlphaToCoverageEnable = false;
-		blend_desc.IndependentBlendEnable = desc.independant_blend == RENOIR_SWITCH_ENABLE;
+		blend_desc.IndependentBlendEnable = desc.independent_blend == RENOIR_SWITCH_ENABLE;
 		for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			blend_desc.RenderTarget[i].BlendEnable = desc.blend[i].enabled == RENOIR_SWITCH_ENABLE;
@@ -1956,7 +1956,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			blend_desc.RenderTarget[i].DestBlendAlpha = _renoir_blend_to_dx(desc.blend[i].dst_alpha);
 			blend_desc.RenderTarget[i].BlendOpAlpha = _renoir_blend_eq_to_dx(desc.blend[i].eq_alpha);
 			blend_desc.RenderTarget[i].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
-			if (desc.independant_blend == RENOIR_SWITCH_DISABLE)
+			if (desc.independent_blend == RENOIR_SWITCH_DISABLE)
 				break;
 		}
 		res = self->device->CreateBlendState(&blend_desc, &h->pipeline.blend_state);
@@ -2276,7 +2276,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			if (auto swapchain = self->current_pass->raster_pass.swapchain)
 			{
-				self->context->ClearRenderTargetView(swapchain->swapchain.render_target_view, &desc.color.r);
+				self->context->ClearRenderTargetView(swapchain->swapchain.render_target_view, &desc.color[0].r);
 			}
 			else
 			{
@@ -2285,7 +2285,10 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					auto render_target = self->current_pass->raster_pass.render_target_view[i];
 					if (render_target == nullptr)
 						continue;
-					self->context->ClearRenderTargetView(render_target, &desc.color.r);
+					float* color = &desc.color[0].r;
+					if (desc.independent_clear_color == RENOIR_SWITCH_ENABLE)
+						color = &desc.color[i].r;
+					self->context->ClearRenderTargetView(render_target, color);
 				}
 			}
 		}
@@ -3380,8 +3383,8 @@ _renoir_dx11_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 	if (desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
 		desc.depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
-	if (desc.independant_blend == RENOIR_SWITCH_DEFAULT)
-		desc.independant_blend = RENOIR_SWITCH_DISABLE;
+	if (desc.independent_blend == RENOIR_SWITCH_DEFAULT)
+		desc.independent_blend = RENOIR_SWITCH_DISABLE;
 
 	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 	{
@@ -3400,7 +3403,7 @@ _renoir_dx11_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
 		if (desc.blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
 			desc.blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
 		
-		if (desc.independant_blend == RENOIR_SWITCH_DISABLE)
+		if (desc.independent_blend == RENOIR_SWITCH_DISABLE)
 			break;
 	}
 
@@ -3685,6 +3688,9 @@ _renoir_dx11_clear(Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc)
 	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
+	if (desc.independent_clear_color == RENOIR_SWITCH_DEFAULT)
+		desc.independent_clear_color = RENOIR_SWITCH_DISABLE;
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PASS_CLEAR);
