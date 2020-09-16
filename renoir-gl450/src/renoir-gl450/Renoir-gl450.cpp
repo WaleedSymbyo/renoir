@@ -1968,6 +1968,10 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 
 		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
+			// Note(Moustapha): this is because of opengl weird specs, scissor box will affect the blit
+			auto scissor_enabled = glIsEnabled(GL_SCISSOR_TEST);
+			glDisable(GL_SCISSOR_TEST);
+
 			// if this is an off screen view with msaa we'll need to issue a read command to move the data
 			// from renderbuffer to the texture
 			for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
@@ -2042,6 +2046,11 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				// clear depth attachment
 				glNamedFramebufferTexture(self->msaa_resolve_fb, GL_DEPTH_STENCIL_ATTACHMENT, 0, 0);
 			}
+
+			if (scissor_enabled)
+				glEnable(GL_SCISSOR_TEST);
+			else
+				glDisable(GL_SCISSOR_TEST);
 		}
 		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
 		{
