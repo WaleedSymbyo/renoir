@@ -780,8 +780,7 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
-			Renoir_Handle* swapchain;
-		} pass_new;
+		} pass_swapchain_new;
 
 		struct
 		{
@@ -1331,8 +1330,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW:
 	{
-		auto h = command->pass_new.handle;
-		h->raster_pass.swapchain = command->pass_new.swapchain;
+		// do nothing
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -1340,10 +1338,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->pass_offscreen_new.handle;
 		auto& desc = command->pass_offscreen_new.desc;
-		h->raster_pass.offscreen = desc;
 
-		int width = -1;
-		int height = -1;
 		int msaa = -1;
 		
 		glCreateFramebuffers(1, &h->raster_pass.fb);
@@ -1392,18 +1387,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					);
 					assert(_renoir_gl450_check());
 				}
-			}
-
-			// first time getting the width/height
-			if (width == -1 && height == -1)
-			{
-				width = color->texture.size.width * ::powf(0.5f, desc.color[i].level);
-				height = color->texture.size.height * ::powf(0.5f, desc.color[i].level);
-			}
-			else
-			{
-				assert(color->texture.size.width * ::powf(0.5f, desc.color[i].level) == width);
-				assert(color->texture.size.height * ::powf(0.5f, desc.color[i].level) == height);
 			}
 
 			// check that all of them has the same msaa
@@ -1458,18 +1441,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 			}
 
-			// first time getting the width/height
-			if (width == -1 && height == -1)
-			{
-				width = depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level);
-				height = depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level);
-			}
-			else
-			{
-				assert(depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level) == width);
-				assert(depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level) == height);
-			}
-
 			// check that all of them has the same msaa
 			if (msaa == -1)
 			{
@@ -1482,8 +1453,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		}
 		assert(_renoir_gl450_check());
 		assert(glCheckNamedFramebufferStatus(h->raster_pass.fb, GL_FRAMEBUFFER) == GL_FRAMEBUFFER_COMPLETE);
-		h->raster_pass.width = width;
-		h->raster_pass.height = height;
 		break;
 	}
 	case RENOIR_COMMAND_KIND_PASS_COMPUTE_NEW:
@@ -3166,9 +3135,10 @@ _renoir_gl450_pass_swapchain_new(Renoir* api, Renoir_Swapchain swapchain)
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_RASTER_PASS);
+	h->raster_pass.swapchain = (Renoir_Handle*)swapchain.handle;
+
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_SWAPCHAIN_NEW);
-	command->pass_new.handle = h;
-	command->pass_new.swapchain = (Renoir_Handle*)swapchain.handle;
+	command->pass_swapchain_new.handle = h;
 	_renoir_gl450_command_process(self, command);
 	return Renoir_Pass{h};
 }
@@ -3179,35 +3149,50 @@ _renoir_gl450_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 	auto self = api->ctx;
 
 	// check that all sizes match
-	Renoir_Size size{-1, -1, -1};
+	int width = -1, height = -1;
 	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 	{
-		if (desc.color[i].texture.handle == nullptr)
+		auto color = (Renoir_Handle*)desc.color[i].texture.handle;
+		if (color == nullptr)
 			continue;
 
-		if (size.width == -1)
+		// first time getting the width/height
+		if (width == -1 && height == -1)
 		{
-			auto h = (Renoir_Handle*)desc.color[i].texture.handle;
-			size = h->texture.size;
+			width = color->texture.size.width * ::powf(0.5f, desc.color[i].level);
+			height = color->texture.size.height * ::powf(0.5f, desc.color[i].level);
 		}
 		else
 		{
-			auto h = (Renoir_Handle*)desc.color[i].texture.handle;
-			assert(size.width == h->texture.size.width &&
-				   size.height == h->texture.size.height);
+			assert(color->texture.size.width * ::powf(0.5f, desc.color[i].level) == width);
+			assert(color->texture.size.height * ::powf(0.5f, desc.color[i].level) == height);
 		}
 	}
-	if (desc.depth_stencil.texture.handle && size.width != -1)
+
+	auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
+	if (depth)
 	{
-		auto h = (Renoir_Handle*)desc.depth_stencil.texture.handle;
-		assert(size.width == h->texture.size.width &&
-			   size.height == h->texture.size.height);
+		// first time getting the width/height
+		if (width == -1 && height == -1)
+		{
+			width = depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level);
+			height = depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level);
+		}
+		else
+		{
+			assert(depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level) == width);
+			assert(depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level) == height);
+		}
 	}
 
 	mn::mutex_lock(self->mtx);
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_RASTER_PASS);
+	h->raster_pass.offscreen = desc;
+	h->raster_pass.width = width;
+	h->raster_pass.height = height;
+
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PASS_OFFSCREEN_NEW);
 	command->pass_offscreen_new.handle = h;
 	command->pass_offscreen_new.desc = desc;
@@ -3259,15 +3244,11 @@ _renoir_gl450_pass_size(Renoir* api, Renoir_Pass pass)
 		res.width = swapchain->swapchain.width;
 		res.height = swapchain->swapchain.height;
 	}
-	// this is an off screen
-	else if (h->raster_pass.fb != 0)
+	// this must be an offscreen pass then
+	else
 	{
 		res.width = h->raster_pass.width;
 		res.height = h->raster_pass.height;
-	}
-	else
-	{
-		assert(false && "unreachable");
 	}
 	return res;
 }
