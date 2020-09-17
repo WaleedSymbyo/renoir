@@ -8,6 +8,18 @@
 
 struct Renoir_Command;
 
+enum RENOIR_TIMER_STATE
+{
+	// timer has not added begin
+	RENOIR_TIMER_STATE_NONE,
+	// timer has added a begin but not an end yet
+	RENOIR_TIMER_STATE_BEGIN,
+	// timer has added an end without being ready or even elapsed polled
+	RENOIR_TIMER_STATE_END,
+	// timer is ready but not elapsed polled yet
+	RENOIR_TIMER_STATE_READY,
+};
+
 enum RENOIR_HANDLE_KIND
 {
 	RENOIR_HANDLE_KIND_NONE,
@@ -20,6 +32,7 @@ enum RENOIR_HANDLE_KIND
 	RENOIR_HANDLE_KIND_PROGRAM,
 	RENOIR_HANDLE_KIND_COMPUTE,
 	RENOIR_HANDLE_KIND_PIPELINE,
+	RENOIR_HANDLE_KIND_TIMER,
 };
 
 struct Renoir_Handle
@@ -98,5 +111,12 @@ struct Renoir_Handle
 		{
 			Renoir_Pipeline_Desc desc;
 		} pipeline;
+
+		struct
+		{
+			GLuint timepoints[2];
+			uint64_t elapsed_time_in_nanos;
+			RENOIR_TIMER_STATE state;
+		} timer;
 	};
 };

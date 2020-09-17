@@ -189,6 +189,7 @@ typedef struct Renoir_Program { void* handle; } Renoir_Program;
 typedef struct Renoir_Compute { void* handle; } Renoir_Compute;
 typedef struct Renoir_Pass { void* handle; } Renoir_Pass;
 typedef struct Renoir_Swapchain { void* handle; } Renoir_Swapchain;
+typedef struct Renoir_Timer { void* handle; } Renoir_Timer;
 
 
 // Descriptons
@@ -379,6 +380,10 @@ typedef struct Renoir
 	Renoir_Size (*pass_size)(struct Renoir* api, Renoir_Pass pass);
 	Renoir_Pass_Offscreen_Desc (*pass_offscreen_desc)(struct Renoir* api, Renoir_Pass pass);
 
+	Renoir_Timer (*timer_new)(struct Renoir* api);
+	void (*timer_free)(struct Renoir* api, Renoir_Timer timer);
+	bool (*timer_elapsed)(struct Renoir* api, Renoir_Timer timer, uint64_t* elapsed_time_in_nanos);
+
 	// Graphics Commands
 	void (*pass_begin)(struct Renoir* api, Renoir_Pass pass);
 	void (*pass_end)(struct Renoir* api, Renoir_Pass pass);
@@ -404,6 +409,9 @@ typedef struct Renoir
 	void (*draw)(struct Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc);
 	// Dispatch
 	void (*dispatch)(struct Renoir* api, Renoir_Pass pass, int x, int y, int z);
+	// Timer
+	void (*timer_begin)(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer);
+	void (*timer_end)(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer);
 } Renoir;
 
 #define RENOIR_API "renoir"

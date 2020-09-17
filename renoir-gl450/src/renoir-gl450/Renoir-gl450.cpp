@@ -740,6 +740,9 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_COMPUTE_FREE,
 	RENOIR_COMMAND_KIND_PIPELINE_NEW,
 	RENOIR_COMMAND_KIND_PIPELINE_FREE,
+	RENOIR_COMMAND_KIND_TIMER_NEW,
+	RENOIR_COMMAND_KIND_TIMER_FREE,
+	RENOIR_COMMAND_KIND_TIMER_ELAPSED,
 	RENOIR_COMMAND_KIND_PASS_BEGIN,
 	RENOIR_COMMAND_KIND_PASS_END,
 	RENOIR_COMMAND_KIND_PASS_CLEAR,
@@ -754,7 +757,9 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_BUFFER_BIND,
 	RENOIR_COMMAND_KIND_TEXTURE_BIND,
 	RENOIR_COMMAND_KIND_DRAW,
-	RENOIR_COMMAND_KIND_DISPATCH
+	RENOIR_COMMAND_KIND_DISPATCH,
+	RENOIR_COMMAND_KIND_TIMER_BEGIN,
+	RENOIR_COMMAND_KIND_TIMER_END,
 };
 
 struct Renoir_Command
@@ -871,6 +876,21 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
+		} timer_new;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_free;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_elapsed;
+
+		struct
+		{
+			Renoir_Handle* handle;
 		} pass_begin;
 
 		struct
@@ -957,6 +977,16 @@ struct Renoir_Command
 		{
 			int x, y, z;
 		} dispatch;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_begin;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_end;
 	};
 };
 
@@ -1225,6 +1255,9 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_COMPUTE_FREE:
 	case RENOIR_COMMAND_KIND_PIPELINE_NEW:
 	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
+	case RENOIR_COMMAND_KIND_TIMER_NEW:
+	case RENOIR_COMMAND_KIND_TIMER_FREE:
+	case RENOIR_COMMAND_KIND_TIMER_ELAPSED:
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	case RENOIR_COMMAND_KIND_PASS_END:
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
@@ -1238,6 +1271,8 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
 	case RENOIR_COMMAND_KIND_DRAW:
 	case RENOIR_COMMAND_KIND_DISPATCH:
+	case RENOIR_COMMAND_KIND_TIMER_BEGIN:
+	case RENOIR_COMMAND_KIND_TIMER_END:
 	default:
 		// do nothing
 		break;
@@ -1892,6 +1927,40 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		assert(_renoir_gl450_check());
 		break;
 	}
+	case RENOIR_COMMAND_KIND_TIMER_NEW:
+	{
+		auto h = command->timer_new.handle;
+		glGenQueries(2, h->timer.timepoints);
+		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_FREE:
+	{
+		auto h = command->timer_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		glDeleteQueries(2, h->timer.timepoints);
+		_renoir_gl450_handle_free(self, h);
+		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_ELAPSED:
+	{
+		auto h = command->timer_elapsed.handle;
+		assert(h->timer.state == RENOIR_TIMER_STATE_END);
+		GLint result_available = 0;
+		glGetQueryObjectiv(h->timer.timepoints[1], GL_QUERY_RESULT_AVAILABLE, &result_available);
+		if (result_available)
+		{
+			GLuint64 timepoint[2];
+			glGetQueryObjectui64v(h->timer.timepoints[0], GL_QUERY_RESULT, &timepoint[0]);
+			glGetQueryObjectui64v(h->timer.timepoints[1], GL_QUERY_RESULT, &timepoint[1]);
+			h->timer.elapsed_time_in_nanos = timepoint[1] - timepoint[0];
+			h->timer.state = RENOIR_TIMER_STATE_READY;
+		}
+		assert(_renoir_gl450_check());
+		break;
+	}
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	{
 		auto h = command->pass_begin.handle;
@@ -2533,6 +2602,20 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		glDispatchCompute(command->dispatch.x, command->dispatch.y, command->dispatch.z);
 		// Note(Moustapha): not sure about this barrier
 		glMemoryBarrier(GL_ALL_BARRIER_BITS);
+		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_BEGIN:
+	{
+		auto h = command->timer_begin.handle;
+		glQueryCounter(h->timer.timepoints[0], GL_TIMESTAMP);
+		assert(_renoir_gl450_check());
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_END:
+	{
+		auto h = command->timer_begin.handle;
+		glQueryCounter(h->timer.timepoints[1], GL_TIMESTAMP);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -3262,6 +3345,66 @@ _renoir_gl450_pass_offscreen_desc(Renoir* api, Renoir_Pass pass)
 	return h->raster_pass.offscreen;
 }
 
+static Renoir_Timer
+_renoir_gl450_timer_new(Renoir* api)
+{
+	auto self = api->ctx;
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_TIMER);
+
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TIMER_NEW);
+	command->timer_new.handle = h;
+	_renoir_gl450_command_process(self, command);
+	return Renoir_Timer{h};
+}
+
+static void
+_renoir_gl450_timer_free(struct Renoir* api, Renoir_Timer timer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)timer.handle;
+	assert(h != nullptr);
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TIMER_FREE);
+	command->timer_free.handle = h;
+	_renoir_gl450_command_process(self, command);
+}
+
+static bool
+_renoir_gl450_timer_elapsed(struct Renoir* api, Renoir_Timer timer, uint64_t* elapsed_time_in_nanos)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)timer.handle;
+	assert(h != nullptr);
+	assert(h->kind == RENOIR_HANDLE_KIND_TIMER);
+
+	if (h->timer.state == RENOIR_TIMER_STATE_READY)
+	{
+		if (elapsed_time_in_nanos) *elapsed_time_in_nanos = h->timer.elapsed_time_in_nanos;
+		h->timer.state = RENOIR_TIMER_STATE_NONE;
+		return true;
+	}
+	else if (h->timer.state == RENOIR_TIMER_STATE_END)
+	{
+		mn::mutex_lock(self->mtx);
+		auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TIMER_ELAPSED);
+		mn::mutex_unlock(self->mtx);
+
+		command->timer_elapsed.handle = h;
+		_renoir_gl450_command_process(self, command);
+
+		return false;
+	}
+
+	return false;
+}
+
 // Graphics Commands
 static void
 _renoir_gl450_pass_begin(Renoir* api, Renoir_Pass pass)
@@ -3774,6 +3917,73 @@ _renoir_gl450_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
 	_renoir_gl450_command_push(&h->compute_pass, command);
 }
 
+static void
+_renoir_gl450_timer_begin(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
+
+	auto htimer = (Renoir_Handle*)timer.handle;
+	assert(htimer != nullptr && htimer->kind == RENOIR_HANDLE_KIND_TIMER);
+
+	if(htimer->timer.state != RENOIR_TIMER_STATE_NONE)
+		return;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TIMER_BEGIN);
+	mn::mutex_unlock(self->mtx);
+
+	command->timer_begin.handle = htimer;
+	htimer->timer.state = RENOIR_TIMER_STATE_BEGIN;
+
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_gl450_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_gl450_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "unreachable");
+	}
+}
+
+static void
+_renoir_gl450_timer_end(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
+
+	auto htimer = (Renoir_Handle*)timer.handle;
+	assert(htimer != nullptr && htimer->kind == RENOIR_HANDLE_KIND_TIMER);
+	if (htimer->timer.state != RENOIR_TIMER_STATE_BEGIN)
+		return;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TIMER_END);
+	mn::mutex_unlock(self->mtx);
+
+	command->timer_end.handle = htimer;
+	htimer->timer.state = RENOIR_TIMER_STATE_END;
+
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_gl450_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_gl450_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "unreachable");
+	}
+}
+
 inline static void
 _renoir_load_api(Renoir* api)
 {
@@ -3815,6 +4025,10 @@ _renoir_load_api(Renoir* api)
 	api->pass_size = _renoir_gl450_pass_size;
 	api->pass_offscreen_desc = _renoir_gl450_pass_offscreen_desc;
 
+	api->timer_new = _renoir_gl450_timer_new;
+	api->timer_free = _renoir_gl450_timer_free;
+	api->timer_elapsed = _renoir_gl450_timer_elapsed;
+
 	api->pass_begin = _renoir_gl450_pass_begin;
 	api->pass_end = _renoir_gl450_pass_end;
 	api->clear = _renoir_gl450_clear;
@@ -3833,6 +4047,8 @@ _renoir_load_api(Renoir* api)
 	api->texture_compute_bind = _renoir_gl450_texture_compute_bind;
 	api->draw = _renoir_gl450_draw;
 	api->dispatch = _renoir_gl450_dispatch;
+	api->timer_begin = _renoir_gl450_timer_begin;
+	api->timer_end = _renoir_gl450_timer_end;
 }
 
 Renoir*
