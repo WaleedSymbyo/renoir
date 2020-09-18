@@ -276,6 +276,18 @@ struct Renoir_Compute_Write_Slot
 
 struct Renoir_Command;
 
+enum RENOIR_TIMER_STATE
+{
+	// timer has not added begin
+	RENOIR_TIMER_STATE_NONE,
+	// timer has added a begin but not an end yet
+	RENOIR_TIMER_STATE_BEGIN,
+	// timer has added an end without being ready or even elapsed polled
+	RENOIR_TIMER_STATE_END,
+	// timer is ready but not elapsed polled yet
+	RENOIR_TIMER_STATE_READY,
+};
+
 enum RENOIR_HANDLE_KIND
 {
 	RENOIR_HANDLE_KIND_NONE,
@@ -288,6 +300,7 @@ enum RENOIR_HANDLE_KIND
 	RENOIR_HANDLE_KIND_PROGRAM,
 	RENOIR_HANDLE_KIND_COMPUTE,
 	RENOIR_HANDLE_KIND_PIPELINE,
+	RENOIR_HANDLE_KIND_TIMER,
 };
 
 struct Renoir_Handle
@@ -391,6 +404,15 @@ struct Renoir_Handle
 			ID3D11RasterizerState* raster_state;
 			ID3D11BlendState* blend_state;
 		} pipeline;
+		
+		struct
+		{
+			ID3D11Query* start;
+			ID3D11Query* end;
+			ID3D11Query* frequency;
+			uint64_t elapsed_time_in_nanos;
+			RENOIR_TIMER_STATE state;
+		} timer;
 	};
 };
 
@@ -452,6 +474,9 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_COMPUTE_FREE,
 	RENOIR_COMMAND_KIND_PIPELINE_NEW,
 	RENOIR_COMMAND_KIND_PIPELINE_FREE,
+	RENOIR_COMMAND_KIND_TIMER_NEW,
+	RENOIR_COMMAND_KIND_TIMER_FREE,
+	RENOIR_COMMAND_KIND_TIMER_ELAPSED,
 	RENOIR_COMMAND_KIND_PASS_BEGIN,
 	RENOIR_COMMAND_KIND_PASS_END,
 	RENOIR_COMMAND_KIND_PASS_CLEAR,
@@ -466,7 +491,9 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_BUFFER_BIND,
 	RENOIR_COMMAND_KIND_TEXTURE_BIND,
 	RENOIR_COMMAND_KIND_DRAW,
-	RENOIR_COMMAND_KIND_DISPATCH
+	RENOIR_COMMAND_KIND_DISPATCH,
+	RENOIR_COMMAND_KIND_TIMER_BEGIN,
+	RENOIR_COMMAND_KIND_TIMER_END,
 };
 
 struct Renoir_Command
@@ -589,6 +616,21 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
+		} timer_new;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_free;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_elapsed;
+
+		struct
+		{
+			Renoir_Handle* handle;
 		} pass_begin;
 
 		struct
@@ -675,6 +717,16 @@ struct Renoir_Command
 		{
 			int x, y, z;
 		} dispatch;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_begin;
+
+		struct
+		{
+			Renoir_Handle* handle;
+		} timer_end;
 	};
 };
 
@@ -846,6 +898,9 @@ _renoir_dx11_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_COMPUTE_FREE:
 	case RENOIR_COMMAND_KIND_PIPELINE_NEW:
 	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
+	case RENOIR_COMMAND_KIND_TIMER_NEW:
+	case RENOIR_COMMAND_KIND_TIMER_FREE:
+	case RENOIR_COMMAND_KIND_TIMER_ELAPSED:
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	case RENOIR_COMMAND_KIND_PASS_END:
 	case RENOIR_COMMAND_KIND_PASS_CLEAR:
@@ -859,6 +914,8 @@ _renoir_dx11_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
 	case RENOIR_COMMAND_KIND_DRAW:
 	case RENOIR_COMMAND_KIND_DISPATCH:
+	case RENOIR_COMMAND_KIND_TIMER_BEGIN:
+	case RENOIR_COMMAND_KIND_TIMER_END:
 	default:
 		// do nothing
 		break;
@@ -1945,6 +2002,63 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		_renoir_dx11_handle_free(self, h);
 		break;
 	}
+	case RENOIR_COMMAND_KIND_TIMER_NEW:
+	{
+		auto h = command->timer_new.handle;
+
+		D3D11_QUERY_DESC desc{};
+		desc.Query = D3D11_QUERY_TIMESTAMP_DISJOINT;
+		auto res = self->device->CreateQuery(&desc, &h->timer.frequency);
+		assert(SUCCEEDED(res));
+
+		desc.Query = D3D11_QUERY_TIMESTAMP;
+		res = self->device->CreateQuery(&desc, &h->timer.start);
+		assert(SUCCEEDED(res));
+
+		res = self->device->CreateQuery(&desc, &h->timer.end);
+		assert(SUCCEEDED(res));
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_FREE:
+	{
+		auto h = command->timer_free.handle;
+		if (_renoir_dx11_handle_unref(h) == false)
+			break;
+		
+		h->timer.frequency->Release();
+		h->timer.start->Release();
+		h->timer.end->Release();
+		_renoir_dx11_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_ELAPSED:
+	{
+		auto h = command->timer_elapsed.handle;
+		assert(h->timer.state == RENOIR_TIMER_STATE_END);
+		D3D11_QUERY_DATA_TIMESTAMP_DISJOINT frequency{};
+		auto res = self->context->GetData(h->timer.frequency, &frequency, sizeof(frequency), 0);
+		if (SUCCEEDED(res))
+		{
+			uint64_t start = 0, end = 0;
+			res = self->context->GetData(h->timer.start, &start, sizeof(start), 0);
+			assert(SUCCEEDED(res));
+			res = self->context->GetData(h->timer.end, &end, sizeof(end), 0);
+			assert(SUCCEEDED(res));
+
+			auto delta = end - start;
+			double freq = (double)frequency.Frequency;
+			auto t = (double)delta / freq;
+			t *= 1000000000;
+			h->timer.elapsed_time_in_nanos = (uint64_t)t;
+			h->timer.state = RENOIR_TIMER_STATE_READY;
+
+			if (frequency.Disjoint)
+			{
+				mn::log_warning("unreliable GPU timer reporting {}nanos, this could be due to unplugging the AC cord on a laptop, overheating, etc...", h->timer.elapsed_time_in_nanos);
+			}
+		}
+		break;
+	}
 	case RENOIR_COMMAND_KIND_PASS_BEGIN:
 	{
 		auto h = command->pass_begin.handle;
@@ -2749,6 +2863,20 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		self->context->Dispatch(command->dispatch.x, command->dispatch.y, command->dispatch.z);
 		break;
 	}
+	case RENOIR_COMMAND_KIND_TIMER_BEGIN:
+	{
+		auto h = command->timer_begin.handle;
+		self->context->Begin(h->timer.frequency);
+		self->context->End(h->timer.start);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_END:
+	{
+		auto h = command->timer_begin.handle;
+		self->context->End(h->timer.end);
+		self->context->End(h->timer.frequency);
+		break;
+	}
 	default:
 		assert(false && "unreachable");
 		break;
@@ -3539,6 +3667,66 @@ _renoir_dx11_pass_offscreen_desc(Renoir* api, Renoir_Pass pass)
 	return h->raster_pass.offscreen;
 }
 
+static Renoir_Timer
+_renoir_dx11_timer_new(Renoir* api)
+{
+	auto self = api->ctx;
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_TIMER);
+
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TIMER_NEW);
+	command->timer_new.handle = h;
+	_renoir_dx11_command_process(self, command);
+	return Renoir_Timer{h};
+}
+
+static void
+_renoir_dx11_timer_free(struct Renoir* api, Renoir_Timer timer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)timer.handle;
+	assert(h != nullptr);
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TIMER_FREE);
+	command->timer_free.handle = h;
+	_renoir_dx11_command_process(self, command);
+}
+
+static bool
+_renoir_dx11_timer_elapsed(struct Renoir* api, Renoir_Timer timer, uint64_t* elapsed_time_in_nanos)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)timer.handle;
+	assert(h != nullptr);
+	assert(h->kind == RENOIR_HANDLE_KIND_TIMER);
+
+	if (h->timer.state == RENOIR_TIMER_STATE_READY)
+	{
+		if (elapsed_time_in_nanos) *elapsed_time_in_nanos = h->timer.elapsed_time_in_nanos;
+		h->timer.state = RENOIR_TIMER_STATE_NONE;
+		return true;
+	}
+	else if (h->timer.state == RENOIR_TIMER_STATE_END)
+	{
+		mn::mutex_lock(self->mtx);
+		auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TIMER_ELAPSED);
+		mn::mutex_unlock(self->mtx);
+
+		command->timer_elapsed.handle = h;
+		_renoir_dx11_command_process(self, command);
+
+		return false;
+	}
+
+	return false;
+}
+
 // Graphics Commands
 static void
 _renoir_dx11_pass_begin(Renoir* api, Renoir_Pass pass)
@@ -4053,6 +4241,73 @@ _renoir_dx11_dispatch(Renoir* api, Renoir_Pass pass, int x, int y, int z)
 	_renoir_dx11_command_push(&h->compute_pass, command);
 }
 
+static void
+_renoir_dx11_timer_begin(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
+
+	auto htimer = (Renoir_Handle*)timer.handle;
+	assert(htimer != nullptr && htimer->kind == RENOIR_HANDLE_KIND_TIMER);
+
+	if(htimer->timer.state != RENOIR_TIMER_STATE_NONE)
+		return;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TIMER_BEGIN);
+	mn::mutex_unlock(self->mtx);
+
+	command->timer_begin.handle = htimer;
+	htimer->timer.state = RENOIR_TIMER_STATE_BEGIN;
+
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_dx11_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_dx11_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "unreachable");
+	}
+}
+
+static void
+_renoir_dx11_timer_end(struct Renoir* api, Renoir_Pass pass, Renoir_Timer timer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
+
+	auto htimer = (Renoir_Handle*)timer.handle;
+	assert(htimer != nullptr && htimer->kind == RENOIR_HANDLE_KIND_TIMER);
+	if (htimer->timer.state != RENOIR_TIMER_STATE_BEGIN)
+		return;
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TIMER_END);
+	mn::mutex_unlock(self->mtx);
+
+	command->timer_end.handle = htimer;
+	htimer->timer.state = RENOIR_TIMER_STATE_END;
+
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_dx11_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_dx11_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "unreachable");
+	}
+}
+
 
 inline static void
 _renoir_load_api(Renoir* api)
@@ -4095,6 +4350,10 @@ _renoir_load_api(Renoir* api)
 	api->pass_size = _renoir_dx11_pass_size;
 	api->pass_offscreen_desc = _renoir_dx11_pass_offscreen_desc;
 
+	api->timer_new = _renoir_dx11_timer_new;
+	api->timer_free = _renoir_dx11_timer_free;
+	api->timer_elapsed = _renoir_dx11_timer_elapsed;
+
 	api->pass_begin = _renoir_dx11_pass_begin;
 	api->pass_end = _renoir_dx11_pass_end;
 	api->clear = _renoir_dx11_clear;
@@ -4113,6 +4372,8 @@ _renoir_load_api(Renoir* api)
 	api->buffer_compute_bind = _renoir_dx11_buffer_compute_bind;
 	api->draw = _renoir_dx11_draw;
 	api->dispatch = _renoir_dx11_dispatch;
+	api->timer_begin = _renoir_dx11_timer_begin;
+	api->timer_end = _renoir_dx11_timer_end;
 }
 
 Renoir*
