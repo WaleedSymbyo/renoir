@@ -2720,6 +2720,86 @@ _renoir_gl450_sampler_get(IRenoir* self, Renoir_Sampler_Desc desc)
 	return sampler;
 }
 
+inline static void
+_renoir_gl450_handle_leak_free(IRenoir* self, Renoir_Command* command)
+{
+	switch(command->kind)
+	{
+	case RENOIR_COMMAND_KIND_SWAPCHAIN_FREE:
+	{
+		auto h = command->swapchain_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_PASS_FREE:
+	{
+		auto h = command->pass_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_BUFFER_FREE:
+	{
+		auto h = command->buffer_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TEXTURE_FREE:
+	{
+		auto h = command->texture_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_SAMPLER_FREE:
+	{
+		auto h = command->sampler_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_PROGRAM_FREE:
+	{
+		auto h = command->program_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_COMPUTE_FREE:
+	{
+		auto h = command->compute_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
+	{
+		auto h = command->pipeline_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_TIMER_FREE:
+	{
+		auto h = command->timer_free.handle;
+		if (_renoir_gl450_handle_unref(h) == false)
+			break;
+		_renoir_gl450_handle_free(self, h);
+		break;
+	}
+	}
+}
+
 // API
 static bool
 _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
@@ -2752,6 +2832,9 @@ static void
 _renoir_gl450_dispose(Renoir* api)
 {
 	auto self = api->ctx;
+	// process these commands for frees to give correct leak report
+	for (auto it = self->command_list_head; it != nullptr; it = it->next)
+		_renoir_gl450_handle_leak_free(self, it);
 	#if RENOIR_LEAK
 		for(auto[handle, info]: self->alive_handles)
 		{
