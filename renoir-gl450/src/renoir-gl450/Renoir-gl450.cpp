@@ -2738,6 +2738,33 @@ _renoir_gl450_handle_leak_free(IRenoir* self, Renoir_Command* command)
 		auto h = command->pass_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
+		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+		{
+			// free all the bound textures if it's a framebuffer pass
+			if (h->raster_pass.swapchain == nullptr)
+			{
+				for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+				{
+					auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
+					if (color == nullptr)
+						continue;
+					
+					// issue command to free the color texture
+					auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+					command->texture_free.handle = color;
+					_renoir_gl450_handle_leak_free(self, command);
+				}
+
+				auto depth = (Renoir_Handle*)h->raster_pass.offscreen.depth_stencil.texture.handle;
+				if (depth)
+				{
+					// issue command to free the depth texture
+					auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
+					command->texture_free.handle = depth;
+					_renoir_gl450_handle_leak_free(self, command);
+				}
+			}
+		}
 		_renoir_gl450_handle_free(self, h);
 		break;
 	}
