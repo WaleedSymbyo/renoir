@@ -1947,7 +1947,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_TIMER_ELAPSED:
 	{
 		auto h = command->timer_elapsed.handle;
-		assert(h->timer.state == RENOIR_TIMER_STATE_END);
+		assert(h->timer.state == RENOIR_TIMER_STATE_READ_SCHEDULED);
 		GLint result_available = 0;
 		glGetQueryObjectiv(h->timer.timepoints[1], GL_QUERY_RESULT_AVAILABLE, &result_available);
 		if (result_available)
@@ -1957,6 +1957,10 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glGetQueryObjectui64v(h->timer.timepoints[1], GL_QUERY_RESULT, &timepoint[1]);
 			h->timer.elapsed_time_in_nanos = timepoint[1] - timepoint[0];
 			h->timer.state = RENOIR_TIMER_STATE_READY;
+		}
+		else
+		{
+			h->timer.state = RENOIR_TIMER_STATE_END;
 		}
 		assert(_renoir_gl450_check());
 		break;
@@ -3504,6 +3508,7 @@ _renoir_gl450_timer_elapsed(struct Renoir* api, Renoir_Timer timer, uint64_t* el
 	{
 		mn::mutex_lock(self->mtx);
 		auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TIMER_ELAPSED);
+		h->timer.state = RENOIR_TIMER_STATE_READ_SCHEDULED;
 		mn::mutex_unlock(self->mtx);
 
 		command->timer_elapsed.handle = h;

@@ -16,6 +16,8 @@ enum RENOIR_TIMER_STATE
 	RENOIR_TIMER_STATE_BEGIN,
 	// timer has added an end without being ready or even elapsed polled
 	RENOIR_TIMER_STATE_END,
+	// timer read has been scheduled but the actual GPU polling hasn't executed yet
+	RENOIR_TIMER_STATE_READ_SCHEDULED,
 	// timer is ready but not elapsed polled yet
 	RENOIR_TIMER_STATE_READY,
 };

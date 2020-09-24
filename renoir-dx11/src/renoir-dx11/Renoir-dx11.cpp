@@ -284,6 +284,8 @@ enum RENOIR_TIMER_STATE
 	RENOIR_TIMER_STATE_BEGIN,
 	// timer has added an end without being ready or even elapsed polled
 	RENOIR_TIMER_STATE_END,
+	// timer read has been scheduled but the actual GPU polling hasn't executed yet
+	RENOIR_TIMER_STATE_READ_SCHEDULED,
 	// timer is ready but not elapsed polled yet
 	RENOIR_TIMER_STATE_READY,
 };
@@ -2034,7 +2036,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_TIMER_ELAPSED:
 	{
 		auto h = command->timer_elapsed.handle;
-		assert(h->timer.state == RENOIR_TIMER_STATE_END);
+		assert(h->timer.state == RENOIR_TIMER_STATE_READ_SCHEDULED);
 		D3D11_QUERY_DATA_TIMESTAMP_DISJOINT frequency{};
 		auto res = self->context->GetData(h->timer.frequency, &frequency, sizeof(frequency), 0);
 		if (SUCCEEDED(res))
@@ -2056,6 +2058,10 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				mn::log_warning("unreliable GPU timer reporting {}nanos, this could be due to unplugging the AC cord on a laptop, overheating, etc...", h->timer.elapsed_time_in_nanos);
 			}
+		}
+		else
+		{
+			h->timer.state = RENOIR_TIMER_STATE_END;
 		}
 		break;
 	}
@@ -3826,6 +3832,7 @@ _renoir_dx11_timer_elapsed(struct Renoir* api, Renoir_Timer timer, uint64_t* ela
 	{
 		mn::mutex_lock(self->mtx);
 		auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TIMER_ELAPSED);
+		h->timer.state = RENOIR_TIMER_STATE_READ_SCHEDULED;
 		mn::mutex_unlock(self->mtx);
 
 		command->timer_elapsed.handle = h;
