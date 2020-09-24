@@ -47,11 +47,8 @@ int main()
 	bool ok = gfx->init(gfx, settings, display);
 	assert(ok && "gfx init failed");
 
-	Renoir_View view = gfx->view_window_new(gfx, 800, 600, handle, display);
+	auto swapchain = gfx->swapchain_new(gfx, 800, 600, handle, display);
 
-	bool dbg = gfx->program_check(gfx, RENOIR_SHADER_VERTEX, vertex_shader, 0, nullptr, 0);
-	dbg = gfx->program_check(gfx, RENOIR_SHADER_PIXEL, pixel_shader, 0, nullptr, 0);
-	
 	Renoir_Program_Desc program_desc{};
 	program_desc.vertex.bytes = vertex_shader;
 	program_desc.pixel.bytes = pixel_shader;
@@ -85,7 +82,7 @@ int main()
 	indices_desc.data_size = sizeof(triangle_indices);
 	Renoir_Buffer indices = gfx->buffer_new(gfx, indices_desc);
 
-	Renoir_Pass pass = gfx->pass_new(gfx);
+	Renoir_Pass pass = gfx->pass_swapchain_new(gfx, swapchain);
 
 	while(true)
 	{
@@ -104,14 +101,14 @@ int main()
 		else if(event.kind == RENOIR_EVENT_KIND_WINDOW_RESIZE)
 		{
 			printf("resize: %d %d\n", event.resize.width, event.resize.height);
-			gfx->view_resize(gfx, view, event.resize.width, event.resize.height);
+			gfx->swapchain_resize(gfx, swapchain, event.resize.width, event.resize.height);
 		}
 
-		gfx->pass_begin(gfx, pass, view);
+		gfx->pass_begin(gfx, pass);
 
 		Renoir_Clear_Desc clear{};
 		clear.flags = RENOIR_CLEAR(RENOIR_CLEAR_COLOR|RENOIR_CLEAR_DEPTH);
-		clear.color = {0.0f, 0.0f, 0.0f, 1.0f};
+		clear.color[0] = {0.0f, 0.0f, 0.0f, 1.0f};
 		clear.depth = 1.0f;
 		clear.stencil = 0;
 		gfx->clear(gfx, pass, clear);
@@ -137,14 +134,14 @@ int main()
 		gfx->draw(gfx, pass, draw);
 
 		gfx->pass_end(gfx, pass);
-		gfx->view_present(gfx, view);
+		gfx->swapchain_present(gfx, swapchain);
 	}
 
 	gfx->program_free(gfx, program);
 	gfx->pipeline_free(gfx, pipeline);
 	gfx->buffer_free(gfx, vertices);
 	gfx->buffer_free(gfx, indices);
-	gfx->view_free(gfx, view);
+	gfx->swapchain_free(gfx, swapchain);
 	gfx->pass_free(gfx, pass);
 	gfx->dispose(gfx);
 
