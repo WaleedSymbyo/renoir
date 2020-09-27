@@ -3324,8 +3324,13 @@ _renoir_dx11_handle_leak_free(IRenoir* self, Renoir_Command* command)
 static bool
 _renoir_dx11_init(Renoir* api, Renoir_Settings settings, void*)
 {
-	static_assert(RENOIR_CONSTANT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
-	static_assert(RENOIR_CONSTANT_PIPELINE_CACHE_SIZE > 0, "pipeline cache size should be > 0");
+	static_assert(RENOIR_CONSTANT_DEFAULT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
+	static_assert(RENOIR_CONSTANT_DEFAULT_PIPELINE_CACHE_SIZE > 0, "pipeline cache size should be > 0");
+
+	if (settings.sampler_cache_size <= 0)
+		settings.sampler_cache_size = RENOIR_CONSTANT_DEFAULT_SAMPLER_CACHE_SIZE;
+	if (settings.pipeline_cache_size <= 0)
+		settings.pipeline_cache_size = RENOIR_CONSTANT_DEFAULT_PIPELINE_CACHE_SIZE;
 
 	IDXGIFactory* factory = nullptr;
 	IDXGIAdapter* adapter = nullptr;
@@ -3388,8 +3393,8 @@ _renoir_dx11_init(Renoir* api, Renoir_Settings settings, void*)
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
 	self->pipeline_cache = mn::buf_new<Renoir_Handle*>();
 	self->alive_handles = mn::map_new<Renoir_Handle*, Renoir_Leak_Info>();
-	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
-	mn::buf_resize_fill(self->pipeline_cache, RENOIR_CONSTANT_PIPELINE_CACHE_SIZE, nullptr);
+	mn::buf_resize_fill(self->sampler_cache, self->settings.sampler_cache_size, nullptr);
+	mn::buf_resize_fill(self->pipeline_cache, self->settings.pipeline_cache_size, nullptr);
 
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_INIT);
 	_renoir_dx11_command_process(self, command);

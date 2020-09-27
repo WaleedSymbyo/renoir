@@ -2845,8 +2845,13 @@ _renoir_gl450_handle_leak_free(IRenoir* self, Renoir_Command* command)
 static bool
 _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 {
-	static_assert(RENOIR_CONSTANT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
-	static_assert(RENOIR_CONSTANT_PIPELINE_CACHE_SIZE > 0, "pipeline cache size should be > 0");
+	static_assert(RENOIR_CONSTANT_DEFAULT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
+	static_assert(RENOIR_CONSTANT_DEFAULT_PIPELINE_CACHE_SIZE > 0, "pipeline cache size should be > 0");
+
+	if (settings.sampler_cache_size <= 0)
+		settings.sampler_cache_size = RENOIR_CONSTANT_DEFAULT_SAMPLER_CACHE_SIZE;
+	if (settings.pipeline_cache_size <= 0)
+		settings.pipeline_cache_size = RENOIR_CONSTANT_DEFAULT_PIPELINE_CACHE_SIZE;
 
 	auto ctx = renoir_gl450_context_new(&settings, display);
 	if (ctx == nullptr && settings.external_context == false)
@@ -2860,7 +2865,7 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 	self->ctx = ctx;
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
 	self->alive_handles = mn::map_new<Renoir_Handle*, Renoir_Leak_Info>();
-	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
+	mn::buf_resize_fill(self->sampler_cache, self->settings.sampler_cache_size, nullptr);
 
 	self->current_pipeline = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PIPELINE);
 	self->current_pipeline->pipeline.desc = Renoir_Pipeline_Desc{};
