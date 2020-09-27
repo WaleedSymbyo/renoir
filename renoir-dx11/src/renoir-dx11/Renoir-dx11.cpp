@@ -441,17 +441,20 @@ _renoir_handle_kind_name(RENOIR_HANDLE_KIND kind)
 inline static bool
 _renoir_handle_kind_should_track(RENOIR_HANDLE_KIND kind)
 {
-	return (kind == RENOIR_HANDLE_KIND_NONE ||
-			kind == RENOIR_HANDLE_KIND_SWAPCHAIN ||
-			kind == RENOIR_HANDLE_KIND_RASTER_PASS ||
-			kind == RENOIR_HANDLE_KIND_COMPUTE_PASS ||
-			kind == RENOIR_HANDLE_KIND_BUFFER ||
-			kind == RENOIR_HANDLE_KIND_TEXTURE ||
-			// we ignore the samplers because they are cached not user created
-			// kind == RENOIR_HANDLE_KIND_SAMPLER ||
-			kind == RENOIR_HANDLE_KIND_PROGRAM ||
-			kind == RENOIR_HANDLE_KIND_COMPUTE ||
-			kind == RENOIR_HANDLE_KIND_PIPELINE);
+	return (
+		kind == RENOIR_HANDLE_KIND_NONE ||
+		kind == RENOIR_HANDLE_KIND_SWAPCHAIN ||
+		kind == RENOIR_HANDLE_KIND_RASTER_PASS ||
+		kind == RENOIR_HANDLE_KIND_COMPUTE_PASS ||
+		kind == RENOIR_HANDLE_KIND_BUFFER ||
+		kind == RENOIR_HANDLE_KIND_TEXTURE ||
+		// we ignore the samplers because they are cached not user created
+		// kind == RENOIR_HANDLE_KIND_SAMPLER ||
+		kind == RENOIR_HANDLE_KIND_PROGRAM ||
+		kind == RENOIR_HANDLE_KIND_COMPUTE
+		// we ignore the pipeline because they are cached not user created
+		// kind == RENOIR_HANDLE_KIND_PIPELINE
+	);
 }
 
 inline static void
