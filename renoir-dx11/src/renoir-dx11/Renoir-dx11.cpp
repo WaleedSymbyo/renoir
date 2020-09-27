@@ -402,6 +402,7 @@ struct Renoir_Handle
 
 		struct
 		{
+			Renoir_Pipeline_Desc desc;
 			ID3D11DepthStencilState* depth_state;
 			ID3D11RasterizerState* raster_state;
 			ID3D11BlendState* blend_state;
@@ -451,6 +452,48 @@ _renoir_handle_kind_should_track(RENOIR_HANDLE_KIND kind)
 			kind == RENOIR_HANDLE_KIND_PROGRAM ||
 			kind == RENOIR_HANDLE_KIND_COMPUTE ||
 			kind == RENOIR_HANDLE_KIND_PIPELINE);
+}
+
+inline static void
+_renoir_dx11_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
+{
+	if (desc->rasterizer.cull == RENOIR_SWITCH_DEFAULT)
+		desc->rasterizer.cull = RENOIR_SWITCH_ENABLE;
+	if (desc->rasterizer.cull_face == RENOIR_FACE_NONE)
+		desc->rasterizer.cull_face = RENOIR_FACE_BACK;
+	if (desc->rasterizer.cull_front == RENOIR_ORIENTATION_NONE)
+		desc->rasterizer.cull_front = RENOIR_ORIENTATION_CCW;
+	if (desc->rasterizer.scissor == RENOIR_SWITCH_DEFAULT)
+		desc->rasterizer.scissor = RENOIR_SWITCH_DISABLE;
+
+	if (desc->depth_stencil.depth == RENOIR_SWITCH_DEFAULT)
+		desc->depth_stencil.depth = RENOIR_SWITCH_ENABLE;
+	if (desc->depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
+		desc->depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
+
+	if (desc->independent_blend == RENOIR_SWITCH_DEFAULT)
+		desc->independent_blend = RENOIR_SWITCH_DISABLE;
+
+	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+	{
+		if (desc->blend[i].enabled == RENOIR_SWITCH_DEFAULT)
+			desc->blend[i].enabled = RENOIR_SWITCH_ENABLE;
+		if (desc->blend[i].src_rgb == RENOIR_BLEND_NONE)
+			desc->blend[i].src_rgb = RENOIR_BLEND_SRC_ALPHA;
+		if (desc->blend[i].dst_rgb == RENOIR_BLEND_NONE)
+			desc->blend[i].dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc->blend[i].src_alpha == RENOIR_BLEND_NONE)
+			desc->blend[i].src_alpha = RENOIR_BLEND_ONE;
+		if (desc->blend[i].dst_alpha == RENOIR_BLEND_NONE)
+			desc->blend[i].dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc->blend[i].eq_rgb == RENOIR_BLEND_EQ_NONE)
+			desc->blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
+		if (desc->blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
+			desc->blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
+		
+		if (desc->independent_blend == RENOIR_SWITCH_DISABLE)
+			break;
+	}
 }
 
 enum RENOIR_COMMAND_KIND
@@ -607,7 +650,6 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
-			Renoir_Pipeline_Desc desc;
 		} pipeline_new;
 
 		struct
@@ -761,6 +803,7 @@ struct IRenoir
 
 	// caches
 	mn::Buf<Renoir_Handle*> sampler_cache;
+	mn::Buf<Renoir_Handle*> pipeline_cache;
 
 	// leak detection
 	mn::Map<Renoir_Handle*, Renoir_Leak_Info> alive_handles;
@@ -1914,7 +1957,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_PIPELINE_NEW:
 	{
 		auto h = command->pipeline_new.handle;
-		auto& desc = command->pipeline_new.desc;
+		auto& desc = h->pipeline.desc;
 
 		D3D11_DEPTH_STENCIL_DESC depth_desc{};
 
@@ -2926,6 +2969,188 @@ operator==(const Renoir_Sampler_Desc& a, const Renoir_Sampler_Desc& b)
 	);
 }
 
+static Renoir_Handle*
+_renoir_dx11_pipeline_new(IRenoir* self, Renoir_Pipeline_Desc desc)
+{
+	_renoir_dx11_pipeline_desc_defaults(&desc);
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_PIPELINE);
+	h->pipeline.desc = desc;
+
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PIPELINE_NEW);
+	command->pipeline_new.handle = h;
+	_renoir_dx11_command_process(self, command);
+	return h;
+}
+
+static void
+_renoir_dx11_pipeline_free(IRenoir* self, Renoir_Handle* pipeline)
+{
+	assert(pipeline != nullptr);
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PIPELINE_FREE);
+	command->pipeline_free.handle = pipeline;
+	_renoir_dx11_command_process(self, command);
+}
+
+inline static bool
+operator==(const Renoir_Rasterizer_Desc& a, const Renoir_Rasterizer_Desc& b)
+{
+	if (a.cull != b.cull)
+		return false;
+	if (a.cull == RENOIR_SWITCH_ENABLE)
+	{
+		if (a.cull_face != b.cull_face)
+			return false;
+		if (a.cull_front != b.cull_front)
+			return false;
+	}
+	if (a.scissor != b.scissor)
+		return false;
+	return true;
+}
+
+inline static bool
+operator!=(const Renoir_Rasterizer_Desc& a, const Renoir_Rasterizer_Desc& b)
+{
+	return !(a == b);
+}
+
+inline static bool
+operator==(const Renoir_Depth_Desc& a, const Renoir_Depth_Desc& b)
+{
+	if (a.depth != b.depth)
+		return false;
+	if (a.depth == RENOIR_SWITCH_ENABLE)
+	{
+		if (a.depth_write_mask != b.depth_write_mask)
+			return false;
+	}
+	return true;
+}
+
+inline static bool
+operator!=(const Renoir_Depth_Desc& a, const Renoir_Depth_Desc& b)
+{
+	return !(a == b);
+}
+
+inline static bool
+operator==(const Renoir_Blend_Desc& a, const Renoir_Blend_Desc& b)
+{
+	if (a.enabled != b.enabled)
+		return false;
+	if (a.enabled == RENOIR_SWITCH_ENABLE)
+	{
+		if (a.src_rgb != b.src_rgb)
+			return false;
+		if (a.dst_rgb != b.dst_rgb)
+			return false;
+		if (a.src_alpha != b.src_alpha)
+			return false;
+		if (a.dst_alpha != b.dst_alpha)
+			return false;
+		if (a.eq_rgb != b.eq_rgb)
+			return false;
+		if (a.eq_alpha != b.eq_alpha)
+			return false;
+	}
+	return true;
+}
+
+inline static bool
+operator!=(const Renoir_Blend_Desc& a, const Renoir_Blend_Desc& b)
+{
+	return !(a == b);
+}
+
+inline static bool
+operator==(const Renoir_Pipeline_Desc& a, const Renoir_Pipeline_Desc& b)
+{
+	if (a.rasterizer != b.rasterizer)
+		return false;
+	if (a.depth_stencil != b.depth_stencil)
+		return false;
+	if (a.independent_blend != b.independent_blend)
+		return false;
+	if (a.independent_blend == RENOIR_SWITCH_ENABLE)
+	{
+		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+			if (a.blend[i] != b.blend[i])
+				return false;
+	}
+	else
+	{
+		if (a.blend[0] != b.blend[0])
+			return false;
+	}
+	return true;
+}
+
+inline static Renoir_Handle*
+_renoir_dx11_pipeline_get(IRenoir* self, Renoir_Pipeline_Desc desc)
+{
+	size_t best_ix = self->pipeline_cache.count;
+	size_t first_empty_ix = self->pipeline_cache.count;
+	for (size_t i = 0; i < self->pipeline_cache.count; ++i)
+	{
+		auto hpipeline = self->pipeline_cache[i];
+		if (hpipeline == nullptr)
+		{
+			if (first_empty_ix == self->pipeline_cache.count)
+				first_empty_ix = i;
+			continue;
+		}
+
+		if (desc == hpipeline->pipeline.desc)
+		{
+			best_ix = i;
+			break;
+		}
+	}
+
+	// we found what we were looking for
+	if (best_ix < self->pipeline_cache.count)
+	{
+		auto res = self->pipeline_cache[best_ix];
+		// reorder the cache
+		for (size_t i = 0; i < best_ix; ++i)
+		{
+			auto index = best_ix - i - 1;
+			self->pipeline_cache[index + 1] = self->pipeline_cache[index];
+		}
+		self->pipeline_cache[0] = res;
+		return res;
+	}
+
+	// we didn't find a matching pipeline, so create new one
+	size_t pipeline_ix = first_empty_ix;
+
+	// we didn't find an empty slot for the new pipeline so we'll have to make one for it
+	if (pipeline_ix == self->pipeline_cache.count)
+	{
+		auto to_be_evicted = mn::buf_top(self->pipeline_cache);
+		for (size_t i = 0; i + 1 < self->pipeline_cache.count; ++i)
+		{
+			auto index = self->pipeline_cache.count - i - 1;
+			self->pipeline_cache[index] = self->pipeline_cache[index - 1];
+		}
+		_renoir_dx11_pipeline_free(self, to_be_evicted);
+		mn::log_warning("dx11: pipeline evicted");
+		pipeline_ix = 0;
+	}
+
+	// create the new pipeline and put it at the head of the cache
+	auto pipeline = _renoir_dx11_pipeline_new(self, desc);
+	self->pipeline_cache[pipeline_ix] = pipeline;
+	return pipeline;
+}
+
 inline static Renoir_Handle*
 _renoir_dx11_sampler_get(IRenoir* self, Renoir_Sampler_Desc desc)
 {
@@ -2975,6 +3200,7 @@ _renoir_dx11_sampler_get(IRenoir* self, Renoir_Sampler_Desc desc)
 			self->sampler_cache[index] = self->sampler_cache[index - 1];
 		}
 		_renoir_dx11_sampler_free(self, to_be_evicted);
+		mn::log_warning("dx11: sampler evicted");
 		sampler_ix = 0;
 	}
 
@@ -3096,6 +3322,7 @@ static bool
 _renoir_dx11_init(Renoir* api, Renoir_Settings settings, void*)
 {
 	static_assert(RENOIR_CONSTANT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
+	static_assert(RENOIR_CONSTANT_PIPELINE_CACHE_SIZE > 0, "pipeline cache size should be > 0");
 
 	IDXGIFactory* factory = nullptr;
 	IDXGIAdapter* adapter = nullptr;
@@ -3156,8 +3383,10 @@ _renoir_dx11_init(Renoir* api, Renoir_Settings settings, void*)
 	self->command_pool = mn::pool_new(sizeof(Renoir_Command), 128);
 	self->settings = settings;
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
+	self->pipeline_cache = mn::buf_new<Renoir_Handle*>();
 	self->alive_handles = mn::map_new<Renoir_Handle*, Renoir_Leak_Info>();
 	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
+	mn::buf_resize_fill(self->pipeline_cache, RENOIR_CONSTANT_PIPELINE_CACHE_SIZE, nullptr);
 
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_INIT);
 	_renoir_dx11_command_process(self, command);
@@ -3197,6 +3426,7 @@ _renoir_dx11_dispose(Renoir* api)
 	mn::pool_free(self->handle_pool);
 	mn::pool_free(self->command_pool);
 	mn::buf_free(self->sampler_cache);
+	mn::buf_free(self->pipeline_cache);
 	mn::map_free(self->alive_handles);
 	mn::free(self);
 }
@@ -3579,74 +3809,6 @@ _renoir_dx11_compute_free(Renoir* api, Renoir_Compute compute)
 	_renoir_dx11_command_process(self, command);
 }
 
-static Renoir_Pipeline
-_renoir_dx11_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
-{
-	auto self = api->ctx;
-
-	if (desc.rasterizer.cull == RENOIR_SWITCH_DEFAULT)
-		desc.rasterizer.cull = RENOIR_SWITCH_ENABLE;
-	if (desc.rasterizer.cull_face == RENOIR_FACE_NONE)
-		desc.rasterizer.cull_face = RENOIR_FACE_BACK;
-	if (desc.rasterizer.cull_front == RENOIR_ORIENTATION_NONE)
-		desc.rasterizer.cull_front = RENOIR_ORIENTATION_CCW;
-	if (desc.rasterizer.scissor == RENOIR_SWITCH_DEFAULT)
-		desc.rasterizer.scissor = RENOIR_SWITCH_DISABLE;
-
-	if (desc.depth_stencil.depth == RENOIR_SWITCH_DEFAULT)
-		desc.depth_stencil.depth = RENOIR_SWITCH_ENABLE;
-	if (desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
-		desc.depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
-
-	if (desc.independent_blend == RENOIR_SWITCH_DEFAULT)
-		desc.independent_blend = RENOIR_SWITCH_DISABLE;
-
-	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
-	{
-		if (desc.blend[i].enabled == RENOIR_SWITCH_DEFAULT)
-			desc.blend[i].enabled = RENOIR_SWITCH_ENABLE;
-		if (desc.blend[i].src_rgb == RENOIR_BLEND_NONE)
-			desc.blend[i].src_rgb = RENOIR_BLEND_SRC_ALPHA;
-		if (desc.blend[i].dst_rgb == RENOIR_BLEND_NONE)
-			desc.blend[i].dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-		if (desc.blend[i].src_alpha == RENOIR_BLEND_NONE)
-			desc.blend[i].src_alpha = RENOIR_BLEND_ONE;
-		if (desc.blend[i].dst_alpha == RENOIR_BLEND_NONE)
-			desc.blend[i].dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-		if (desc.blend[i].eq_rgb == RENOIR_BLEND_EQ_NONE)
-			desc.blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
-		if (desc.blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
-			desc.blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
-		
-		if (desc.independent_blend == RENOIR_SWITCH_DISABLE)
-			break;
-	}
-
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
-
-	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_PIPELINE);
-	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PIPELINE_NEW);
-	command->pipeline_new.handle = h;
-	command->pipeline_new.desc = desc;
-	_renoir_dx11_command_process(self, command);
-	return Renoir_Pipeline{h};
-}
-
-static void
-_renoir_dx11_pipeline_free(Renoir* api, Renoir_Pipeline pipeline)
-{
-	auto self = api->ctx;
-	auto h = (Renoir_Handle*)pipeline.handle;
-	assert(h != nullptr);
-
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
-	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_PIPELINE_FREE);
-	command->pipeline_free.handle = h;
-	_renoir_dx11_command_process(self, command);
-}
-
 static Renoir_Pass
 _renoir_dx11_pass_swapchain_new(Renoir* api, Renoir_Swapchain swapchain)
 {
@@ -3993,19 +4155,21 @@ _renoir_dx11_clear(Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc)
 }
 
 static void
-_renoir_dx11_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeline)
+_renoir_dx11_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline_Desc pipeline_desc)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+	_renoir_dx11_pipeline_desc_defaults(&pipeline_desc);
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_USE_PIPELINE);
+	auto pipeline = _renoir_dx11_pipeline_get(self, pipeline_desc);
 	mn::mutex_unlock(self->mtx);
 
-	command->use_pipeline.pipeline = (Renoir_Handle*)pipeline.handle;
+	command->use_pipeline.pipeline = pipeline;
 	_renoir_dx11_command_push(&h->raster_pass, command);
 }
 
@@ -4456,9 +4620,6 @@ _renoir_load_api(Renoir* api)
 
 	api->compute_new = _renoir_dx11_compute_new;
 	api->compute_free = _renoir_dx11_compute_free;
-
-	api->pipeline_new = _renoir_dx11_pipeline_new;
-	api->pipeline_free = _renoir_dx11_pipeline_free;
 
 	api->pass_swapchain_new = _renoir_dx11_pass_swapchain_new;
 	api->pass_offscreen_new = _renoir_dx11_pass_offscreen_new;

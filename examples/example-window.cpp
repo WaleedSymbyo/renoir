@@ -54,8 +54,7 @@ int main()
 	program_desc.pixel.bytes = pixel_shader;
 	Renoir_Program program = gfx->program_new(gfx, program_desc);
 
-	Renoir_Pipeline_Desc pipeline_desc{};
-	Renoir_Pipeline pipeline = gfx->pipeline_new(gfx, pipeline_desc);
+	Renoir_Pipeline_Desc pipeline{};
 
 	float triangle_data[] = {
 		 -1, -1,
@@ -138,7 +137,6 @@ int main()
 	}
 
 	gfx->program_free(gfx, program);
-	gfx->pipeline_free(gfx, pipeline);
 	gfx->buffer_free(gfx, vertices);
 	gfx->buffer_free(gfx, indices);
 	gfx->swapchain_free(gfx, swapchain);

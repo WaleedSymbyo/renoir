@@ -704,17 +704,62 @@ _renoir_handle_kind_name(RENOIR_HANDLE_KIND kind)
 inline static bool
 _renoir_handle_kind_should_track(RENOIR_HANDLE_KIND kind)
 {
-	return (kind == RENOIR_HANDLE_KIND_NONE ||
-			kind == RENOIR_HANDLE_KIND_SWAPCHAIN ||
-			kind == RENOIR_HANDLE_KIND_RASTER_PASS ||
-			kind == RENOIR_HANDLE_KIND_COMPUTE_PASS ||
-			kind == RENOIR_HANDLE_KIND_BUFFER ||
-			kind == RENOIR_HANDLE_KIND_TEXTURE ||
-			// we ignore the samplers because they are cached not user created
-			// kind == RENOIR_HANDLE_KIND_SAMPLER ||
-			kind == RENOIR_HANDLE_KIND_PROGRAM ||
-			kind == RENOIR_HANDLE_KIND_COMPUTE ||
-			kind == RENOIR_HANDLE_KIND_PIPELINE);
+	return (
+		kind == RENOIR_HANDLE_KIND_NONE ||
+		kind == RENOIR_HANDLE_KIND_SWAPCHAIN ||
+		kind == RENOIR_HANDLE_KIND_RASTER_PASS ||
+		kind == RENOIR_HANDLE_KIND_COMPUTE_PASS ||
+		kind == RENOIR_HANDLE_KIND_BUFFER ||
+		kind == RENOIR_HANDLE_KIND_TEXTURE ||
+		// we ignore the samplers because they are cached not user created
+		// kind == RENOIR_HANDLE_KIND_SAMPLER ||
+		kind == RENOIR_HANDLE_KIND_PROGRAM ||
+		kind == RENOIR_HANDLE_KIND_COMPUTE
+		// we ignore the pipeline because they are cached not user created
+		// kind == RENOIR_HANDLE_KIND_PIPELINE
+	);
+}
+
+inline static void
+_renoir_gl450_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
+{
+	if (desc->rasterizer.cull == RENOIR_SWITCH_DEFAULT)
+		desc->rasterizer.cull = RENOIR_SWITCH_ENABLE;
+	if (desc->rasterizer.cull_face == RENOIR_FACE_NONE)
+		desc->rasterizer.cull_face = RENOIR_FACE_BACK;
+	if (desc->rasterizer.cull_front == RENOIR_ORIENTATION_NONE)
+		desc->rasterizer.cull_front = RENOIR_ORIENTATION_CCW;
+	if (desc->rasterizer.scissor == RENOIR_SWITCH_DEFAULT)
+		desc->rasterizer.scissor = RENOIR_SWITCH_DISABLE;
+
+	if (desc->depth_stencil.depth == RENOIR_SWITCH_DEFAULT)
+		desc->depth_stencil.depth = RENOIR_SWITCH_ENABLE;
+	if (desc->depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
+		desc->depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
+
+	if (desc->independent_blend == RENOIR_SWITCH_DEFAULT)
+		desc->independent_blend = RENOIR_SWITCH_DISABLE;
+
+	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
+	{
+		if (desc->blend[i].enabled == RENOIR_SWITCH_DEFAULT)
+			desc->blend[i].enabled = RENOIR_SWITCH_ENABLE;
+		if (desc->blend[i].src_rgb == RENOIR_BLEND_NONE)
+			desc->blend[i].src_rgb = RENOIR_BLEND_SRC_ALPHA;
+		if (desc->blend[i].dst_rgb == RENOIR_BLEND_NONE)
+			desc->blend[i].dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc->blend[i].src_alpha == RENOIR_BLEND_NONE)
+			desc->blend[i].src_alpha = RENOIR_BLEND_ONE;
+		if (desc->blend[i].dst_alpha == RENOIR_BLEND_NONE)
+			desc->blend[i].dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
+		if (desc->blend[i].eq_rgb == RENOIR_BLEND_EQ_NONE)
+			desc->blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
+		if (desc->blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
+			desc->blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
+		
+		if (desc->independent_blend == RENOIR_SWITCH_DISABLE)
+			break;
+	}
 }
 
 
@@ -738,8 +783,6 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_PROGRAM_FREE,
 	RENOIR_COMMAND_KIND_COMPUTE_NEW,
 	RENOIR_COMMAND_KIND_COMPUTE_FREE,
-	RENOIR_COMMAND_KIND_PIPELINE_NEW,
-	RENOIR_COMMAND_KIND_PIPELINE_FREE,
 	RENOIR_COMMAND_KIND_TIMER_NEW,
 	RENOIR_COMMAND_KIND_TIMER_FREE,
 	RENOIR_COMMAND_KIND_TIMER_ELAPSED,
@@ -865,17 +908,6 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
-			Renoir_Pipeline_Desc desc;
-		} pipeline_new;
-
-		struct
-		{
-			Renoir_Handle* handle;
-		} pipeline_free;
-
-		struct
-		{
-			Renoir_Handle* handle;
 		} timer_new;
 
 		struct
@@ -905,7 +937,7 @@ struct Renoir_Command
 
 		struct
 		{
-			Renoir_Handle* pipeline;
+			Renoir_Pipeline_Desc pipeline_desc;
 		} use_pipeline;
 
 		struct
@@ -1253,8 +1285,6 @@ _renoir_gl450_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_SAMPLER_FREE:
 	case RENOIR_COMMAND_KIND_PROGRAM_FREE:
 	case RENOIR_COMMAND_KIND_COMPUTE_FREE:
-	case RENOIR_COMMAND_KIND_PIPELINE_NEW:
-	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
 	case RENOIR_COMMAND_KIND_TIMER_NEW:
 	case RENOIR_COMMAND_KIND_TIMER_FREE:
 	case RENOIR_COMMAND_KIND_TIMER_ELAPSED:
@@ -1912,21 +1942,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		assert(_renoir_gl450_check());
 		break;
 	}
-	case RENOIR_COMMAND_KIND_PIPELINE_NEW:
-	{
-		command->pipeline_new.handle->pipeline.desc = command->pipeline_new.desc;
-		assert(_renoir_gl450_check());
-		break;
-	}
-	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
-	{
-		auto h = command->pipeline_free.handle;
-		if (_renoir_gl450_handle_unref(h) == false)
-			break;
-		_renoir_gl450_handle_free(self, h);
-		assert(_renoir_gl450_check());
-		break;
-	}
 	case RENOIR_COMMAND_KIND_TIMER_NEW:
 	{
 		auto h = command->timer_new.handle;
@@ -2103,6 +2118,8 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			assert(false && "invalid pass");
 		}
 		self->current_pass = nullptr;
+		self->current_pipeline->pipeline.desc = Renoir_Pipeline_Desc{};
+		_renoir_gl450_pipeline_desc_defaults(&self->current_pipeline->pipeline.desc);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -2159,9 +2176,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	}
 	case RENOIR_COMMAND_KIND_USE_PIPELINE:
 	{
-		self->current_pipeline = command->use_pipeline.pipeline;
-
+		self->current_pipeline->pipeline.desc = command->use_pipeline.pipeline_desc;
 		auto h = self->current_pipeline;
+
 		if (h->pipeline.desc.rasterizer.cull == RENOIR_SWITCH_ENABLE)
 		{
 			auto gl_face = _renoir_face_to_gl(h->pipeline.desc.rasterizer.cull_face);
@@ -2715,6 +2732,7 @@ _renoir_gl450_sampler_get(IRenoir* self, Renoir_Sampler_Desc desc)
 			self->sampler_cache[index] = self->sampler_cache[index - 1];
 		}
 		_renoir_gl450_sampler_free(self, to_be_evicted);
+		mn::log_warning("gl450: sampler evicted");
 		sampler_ix = 0;
 	}
 
@@ -2812,14 +2830,6 @@ _renoir_gl450_handle_leak_free(IRenoir* self, Renoir_Command* command)
 		_renoir_gl450_handle_free(self, h);
 		break;
 	}
-	case RENOIR_COMMAND_KIND_PIPELINE_FREE:
-	{
-		auto h = command->pipeline_free.handle;
-		if (_renoir_gl450_handle_unref(h) == false)
-			break;
-		_renoir_gl450_handle_free(self, h);
-		break;
-	}
 	case RENOIR_COMMAND_KIND_TIMER_FREE:
 	{
 		auto h = command->timer_free.handle;
@@ -2836,6 +2846,7 @@ static bool
 _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 {
 	static_assert(RENOIR_CONSTANT_SAMPLER_CACHE_SIZE > 0, "sampler cache size should be > 0");
+	static_assert(RENOIR_CONSTANT_PIPELINE_CACHE_SIZE > 0, "pipeline cache size should be > 0");
 
 	auto ctx = renoir_gl450_context_new(&settings, display);
 	if (ctx == nullptr && settings.external_context == false)
@@ -2850,6 +2861,10 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
 	self->alive_handles = mn::map_new<Renoir_Handle*, Renoir_Leak_Info>();
 	mn::buf_resize_fill(self->sampler_cache, RENOIR_CONSTANT_SAMPLER_CACHE_SIZE, nullptr);
+
+	self->current_pipeline = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PIPELINE);
+	self->current_pipeline->pipeline.desc = Renoir_Pipeline_Desc{};
+	_renoir_gl450_pipeline_desc_defaults(&self->current_pipeline->pipeline.desc);
 
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_INIT);
 	_renoir_gl450_command_process(self, command);
@@ -3255,74 +3270,6 @@ _renoir_gl450_compute_free(Renoir* api, Renoir_Compute compute)
 	_renoir_gl450_command_process(self, command);
 }
 
-static Renoir_Pipeline
-_renoir_gl450_pipeline_new(Renoir* api, Renoir_Pipeline_Desc desc)
-{
-	auto self = api->ctx;
-
-	if (desc.rasterizer.cull == RENOIR_SWITCH_DEFAULT)
-		desc.rasterizer.cull = RENOIR_SWITCH_ENABLE;
-	if (desc.rasterizer.cull_face == RENOIR_FACE_NONE)
-		desc.rasterizer.cull_face = RENOIR_FACE_BACK;
-	if (desc.rasterizer.cull_front == RENOIR_ORIENTATION_NONE)
-		desc.rasterizer.cull_front = RENOIR_ORIENTATION_CCW;
-	if (desc.rasterizer.scissor == RENOIR_SWITCH_DEFAULT)
-		desc.rasterizer.scissor = RENOIR_SWITCH_DISABLE;
-
-	if (desc.depth_stencil.depth == RENOIR_SWITCH_DEFAULT)
-		desc.depth_stencil.depth = RENOIR_SWITCH_ENABLE;
-	if (desc.depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
-		desc.depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
-
-	if (desc.independent_blend == RENOIR_SWITCH_DEFAULT)
-		desc.independent_blend = RENOIR_SWITCH_DISABLE;
-
-	for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
-	{
-		if (desc.blend[i].enabled == RENOIR_SWITCH_DEFAULT)
-			desc.blend[i].enabled = RENOIR_SWITCH_ENABLE;
-		if (desc.blend[i].src_rgb == RENOIR_BLEND_NONE)
-			desc.blend[i].src_rgb = RENOIR_BLEND_SRC_ALPHA;
-		if (desc.blend[i].dst_rgb == RENOIR_BLEND_NONE)
-			desc.blend[i].dst_rgb = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-		if (desc.blend[i].src_alpha == RENOIR_BLEND_NONE)
-			desc.blend[i].src_alpha = RENOIR_BLEND_ONE;
-		if (desc.blend[i].dst_alpha == RENOIR_BLEND_NONE)
-			desc.blend[i].dst_alpha = RENOIR_BLEND_ONE_MINUS_SRC_ALPHA;
-		if (desc.blend[i].eq_rgb == RENOIR_BLEND_EQ_NONE)
-			desc.blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
-		if (desc.blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
-			desc.blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
-		
-		if (desc.independent_blend == RENOIR_SWITCH_DISABLE)
-			break;
-	}
-
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
-
-	auto h = _renoir_gl450_handle_new(self, RENOIR_HANDLE_KIND_PIPELINE);
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PIPELINE_NEW);
-	command->pipeline_new.handle = h;
-	command->pipeline_new.desc = desc;
-	_renoir_gl450_command_process(self, command);
-	return Renoir_Pipeline{h};
-}
-
-static void
-_renoir_gl450_pipeline_free(Renoir* api, Renoir_Pipeline pipeline)
-{
-	auto self = api->ctx;
-	auto h = (Renoir_Handle*)pipeline.handle;
-	assert(h != nullptr);
-
-	mn::mutex_lock(self->mtx);
-	mn_defer(mn::mutex_unlock(self->mtx));
-	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_PIPELINE_FREE);
-	command->pipeline_free.handle = h;
-	_renoir_gl450_command_process(self, command);
-}
-
 static Renoir_Pass
 _renoir_gl450_pass_swapchain_new(Renoir* api, Renoir_Swapchain swapchain)
 {
@@ -3669,19 +3616,20 @@ _renoir_gl450_clear(Renoir* api, Renoir_Pass pass, Renoir_Clear_Desc desc)
 }
 
 static void
-_renoir_gl450_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline pipeline)
+_renoir_gl450_use_pipeline(Renoir* api, Renoir_Pass pass, Renoir_Pipeline_Desc pipeline_desc)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
 
 	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+	_renoir_gl450_pipeline_desc_defaults(&pipeline_desc);
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_USE_PIPELINE);
 	mn::mutex_unlock(self->mtx);
 
-	command->use_pipeline.pipeline = (Renoir_Handle*)pipeline.handle;
+	command->use_pipeline.pipeline_desc = pipeline_desc;
 	_renoir_gl450_command_push(&h->raster_pass, command);
 }
 
@@ -4129,9 +4077,6 @@ _renoir_load_api(Renoir* api)
 
 	api->compute_new = _renoir_gl450_compute_new;
 	api->compute_free = _renoir_gl450_compute_free;
-
-	api->pipeline_new = _renoir_gl450_pipeline_new;
-	api->pipeline_free = _renoir_gl450_pipeline_free;
 
 	api->pass_swapchain_new = _renoir_gl450_pass_swapchain_new;
 	api->pass_offscreen_new = _renoir_gl450_pass_offscreen_new;
