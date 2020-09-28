@@ -360,6 +360,7 @@ typedef struct Renoir
 
 	Renoir_Buffer (*buffer_new)(struct Renoir* api, Renoir_Buffer_Desc desc);
 	void (*buffer_free)(struct Renoir* api, Renoir_Buffer buffer);
+	size_t (*buffer_size)(struct Renoir* api, Renoir_Buffer buffer);
 
 	Renoir_Texture (*texture_new)(struct Renoir* api, Renoir_Texture_Desc desc);
 	void (*texture_free)(struct Renoir* api, Renoir_Texture texture);

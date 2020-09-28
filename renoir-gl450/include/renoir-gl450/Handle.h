@@ -76,6 +76,7 @@ struct Renoir_Handle
 			RENOIR_BUFFER type;
 			RENOIR_USAGE usage;
 			RENOIR_ACCESS access;
+			size_t size;
 		} buffer;
 
 		struct

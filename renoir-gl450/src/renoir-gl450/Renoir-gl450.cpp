@@ -3056,6 +3056,7 @@ _renoir_gl450_buffer_new(Renoir* api, Renoir_Buffer_Desc desc)
 	h->buffer.access = desc.access;
 	h->buffer.type = desc.type;
 	h->buffer.usage = desc.usage;
+	h->buffer.size = desc.data_size;
 
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_BUFFER_NEW);
 	command->buffer_new.handle = h;
@@ -3085,6 +3086,16 @@ _renoir_gl450_buffer_free(Renoir* api, Renoir_Buffer buffer)
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_BUFFER_FREE);
 	command->buffer_free.handle = h;
 	_renoir_gl450_command_process(self, command);
+}
+
+static size_t
+_renoir_gl450_buffer_size(Renoir* api, Renoir_Buffer buffer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)buffer.handle;
+	assert(h != nullptr && h->kind == RENOIR_HANDLE_KIND_BUFFER);
+
+	return h->buffer.size;
 }
 
 static Renoir_Texture
@@ -3174,7 +3185,7 @@ static Renoir_Size
 _renoir_gl450_texture_size(Renoir* api, Renoir_Texture texture)
 {
 	auto h = (Renoir_Handle*)texture.handle;
-	assert(h != nullptr);
+	assert(h != nullptr && h->kind == RENOIR_HANDLE_KIND_TEXTURE);
 	return h->texture.size;
 }
 
@@ -4071,6 +4082,7 @@ _renoir_load_api(Renoir* api)
 
 	api->buffer_new = _renoir_gl450_buffer_new;
 	api->buffer_free = _renoir_gl450_buffer_free;
+	api->buffer_size = _renoir_gl450_buffer_size;
 
 	api->texture_new = _renoir_gl450_texture_new;
 	api->texture_free = _renoir_gl450_texture_free;
