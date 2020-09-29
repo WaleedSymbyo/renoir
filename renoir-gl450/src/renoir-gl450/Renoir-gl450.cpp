@@ -2299,14 +2299,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			command->buffer_write.bytes_size,
 			command->buffer_write.bytes
 		);
-		// void* ptr = glMapNamedBufferRange(
-		// 	h->buffer.id,
-		// 	command->buffer_write.offset,
-		// 	command->buffer_write.bytes_size,
-		// 	GL_MAP_WRITE_BIT
-		// );
-		// ::memcpy(ptr, command->buffer_write.bytes, command->buffer_write.bytes_size);
-		// glUnmapNamedBuffer(h->buffer.id);
 		assert(_renoir_gl450_check());
 		break;
 	}
