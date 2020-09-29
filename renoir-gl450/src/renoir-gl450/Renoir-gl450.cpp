@@ -2293,14 +2293,20 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_BUFFER_WRITE:
 	{
 		auto h = command->buffer_write.handle;
-		void* ptr = glMapNamedBufferRange(
+		glNamedBufferSubData(
 			h->buffer.id,
 			command->buffer_write.offset,
 			command->buffer_write.bytes_size,
-			GL_MAP_WRITE_BIT
+			command->buffer_write.bytes
 		);
-		::memcpy(ptr, command->buffer_write.bytes, command->buffer_write.bytes_size);
-		glUnmapNamedBuffer(h->buffer.id);
+		// void* ptr = glMapNamedBufferRange(
+		// 	h->buffer.id,
+		// 	command->buffer_write.offset,
+		// 	command->buffer_write.bytes_size,
+		// 	GL_MAP_WRITE_BIT
+		// );
+		// ::memcpy(ptr, command->buffer_write.bytes, command->buffer_write.bytes_size);
+		// glUnmapNamedBuffer(h->buffer.id);
 		assert(_renoir_gl450_check());
 		break;
 	}
