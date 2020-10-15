@@ -2530,7 +2530,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 	{
 		auto h = command->texture_bind.handle;
 		glActiveTexture(GL_TEXTURE0 + command->texture_bind.slot);
-		if (command->texture_bind.shader == RENOIR_SHADER_COMPUTE)
+		if (command->texture_bind.sampler == nullptr)
 		{
 			auto gl_format = _renoir_pixelformat_to_gl_compute(h->texture.pixel_format);
 			auto gl_gpu_access = _renoir_access_to_gl(command->texture_bind.gpu_access);
@@ -3896,8 +3896,6 @@ _renoir_gl450_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
 
-	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
-
 	auto htex = (Renoir_Handle*)texture.handle;
 	assert(htex != nullptr);
 
@@ -3920,8 +3918,6 @@ _renoir_gl450_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
-
-	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	auto htex = (Renoir_Handle*)texture.handle;
 	assert(htex != nullptr);

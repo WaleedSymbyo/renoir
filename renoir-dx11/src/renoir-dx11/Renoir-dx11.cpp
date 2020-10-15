@@ -2817,19 +2817,27 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			self->context->GSSetSamplers(command->texture_bind.slot, 1, &command->texture_bind.sampler->sampler.sampler);
 			break;
 		case RENOIR_SHADER_COMPUTE:
-			assert(_renoir_pixelformat_is_depth(h->texture.pixel_format) == false && "you can't write to depth buffer from compute shader");
-			if (command->texture_bind.gpu_access == RENOIR_ACCESS_READ)
+			if (command->texture_bind.sampler == nullptr)
+			{
+				assert(_renoir_pixelformat_is_depth(h->texture.pixel_format) == false && "you can't write to depth buffer from compute shader");
+				if (command->texture_bind.gpu_access == RENOIR_ACCESS_READ)
+				{
+					self->context->CSSetShaderResources(command->texture_bind.slot, 1, &h->texture.shader_view);
+				}
+				else if (command->texture_bind.gpu_access == RENOIR_ACCESS_WRITE ||
+						command->texture_bind.gpu_access == RENOIR_ACCESS_READ_WRITE)
+				{
+					self->context->CSSetUnorderedAccessViews(command->texture_bind.slot, 1, &h->texture.uav, nullptr);
+					Renoir_Compute_Write_Slot write_slot{};
+					write_slot.resource = h;
+					write_slot.slot = command->texture_bind.slot;
+					mn::buf_push(self->current_pass->compute_pass.write_resources, write_slot);
+				}
+			}
+			else
 			{
 				self->context->CSSetShaderResources(command->texture_bind.slot, 1, &h->texture.shader_view);
-			}
-			else if (command->texture_bind.gpu_access == RENOIR_ACCESS_WRITE ||
-					 command->texture_bind.gpu_access == RENOIR_ACCESS_READ_WRITE)
-			{
-				self->context->CSSetUnorderedAccessViews(command->texture_bind.slot, 1, &h->texture.uav, nullptr);
-				Renoir_Compute_Write_Slot write_slot{};
-				write_slot.resource = h;
-				write_slot.slot = command->texture_bind.slot;
-				mn::buf_push(self->current_pass->compute_pass.write_resources, write_slot);
+				self->context->CSSetSamplers(command->texture_bind.slot, 1, &command->texture_bind.sampler->sampler.sampler);
 			}
 			break;
 		default:
@@ -4425,8 +4433,6 @@ _renoir_dx11_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture,
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
 
-	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
-
 	auto htex = (Renoir_Handle*)texture.handle;
 	assert(htex != nullptr);
 
@@ -4449,8 +4455,6 @@ _renoir_dx11_texture_sampler_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture 
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
-
-	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
 
 	auto htex = (Renoir_Handle*)texture.handle;
 	assert(htex != nullptr);
