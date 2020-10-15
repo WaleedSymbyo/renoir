@@ -737,6 +737,15 @@ _renoir_gl450_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
 	if (desc->depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
 		desc->depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
+	if (desc->disabled_color_channels_mask & 0xFF000000)
+		desc->disabled_color_channels_mask |= 0xFF000000;
+	if (desc->disabled_color_channels_mask & 0x00FF0000)
+		desc->disabled_color_channels_mask |= 0x00FF0000;
+	if (desc->disabled_color_channels_mask & 0x0000FF00)
+		desc->disabled_color_channels_mask |= 0x0000FF00;
+	if (desc->disabled_color_channels_mask & 0x000000FF)
+		desc->disabled_color_channels_mask |= 0x000000FF;
+
 	if (desc->independent_blend == RENOIR_SWITCH_DEFAULT)
 		desc->independent_blend = RENOIR_SWITCH_DISABLE;
 
@@ -2223,6 +2232,13 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			glDepthMask(GL_FALSE);
 		}
+
+		glColorMask(
+			~(h->pipeline.desc.disabled_color_channels_mask & 0xFF000000),
+			~(h->pipeline.desc.disabled_color_channels_mask & 0x00FF0000),
+			~(h->pipeline.desc.disabled_color_channels_mask & 0x0000FF00),
+			~(h->pipeline.desc.disabled_color_channels_mask & 0x000000FF)
+		);
 
 		for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{

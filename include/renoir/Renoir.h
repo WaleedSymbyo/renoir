@@ -239,6 +239,11 @@ typedef struct Renoir_Blend_Desc {
 typedef struct Renoir_Pipeline_Desc {
 	Renoir_Rasterizer_Desc rasterizer;
 	Renoir_Depth_Desc depth_stencil;
+	// default: 0x00000000 (write to all channels), any value other than zero per byte/channel = true (disabled)
+	// examples:
+	// to disable all color channels: 0xFFFFFFFF
+	// to disable first channel: 0xFF000000
+	uint32_t disabled_color_channels_mask;
 	RENOIR_SWITCH independent_blend; // default: RENOIR_SWITCH_DISABLE
 	Renoir_Blend_Desc blend[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
 } Pipeline_Desc;

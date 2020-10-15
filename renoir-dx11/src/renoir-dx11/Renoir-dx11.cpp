@@ -474,6 +474,15 @@ _renoir_dx11_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
 	if (desc->depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
 		desc->depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
+	if (desc->disabled_color_channels_mask & 0xFF000000)
+		desc->disabled_color_channels_mask |= 0xFF000000;
+	if (desc->disabled_color_channels_mask & 0x00FF0000)
+		desc->disabled_color_channels_mask |= 0x00FF0000;
+	if (desc->disabled_color_channels_mask & 0x0000FF00)
+		desc->disabled_color_channels_mask |= 0x0000FF00;
+	if (desc->disabled_color_channels_mask & 0x000000FF)
+		desc->disabled_color_channels_mask |= 0x000000FF;
+
 	if (desc->independent_blend == RENOIR_SWITCH_DEFAULT)
 		desc->independent_blend = RENOIR_SWITCH_DISABLE;
 
@@ -2449,7 +2458,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		self->current_pipeline = command->use_pipeline.pipeline;
 
 		auto h = self->current_pipeline;
-		self->context->OMSetBlendState(h->pipeline.blend_state, nullptr, 0xFFFFFF);
+		self->context->OMSetBlendState(h->pipeline.blend_state, nullptr, ~h->pipeline.desc.disabled_color_channels_mask);
 		self->context->OMSetDepthStencilState(h->pipeline.depth_state, 1);
 		self->context->RSSetState(h->pipeline.raster_state);
 		break;
