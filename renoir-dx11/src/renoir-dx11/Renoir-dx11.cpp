@@ -266,6 +266,21 @@ _renoir_msaa_to_dx(RENOIR_MSAA_MODE msaa)
 	}
 }
 
+inline static UINT8
+_renoir_color_mask_to_dx(int color_mask)
+{
+	UINT8 res{};
+	if (color_mask == RENOIR_COLOR_MASK_NONE)
+		return res;
+
+	if (color_mask & RENOIR_COLOR_MASK_RED) res |= D3D11_COLOR_WRITE_ENABLE_RED;
+	if (color_mask & RENOIR_COLOR_MASK_GREEN) res |= D3D11_COLOR_WRITE_ENABLE_GREEN;
+	if (color_mask & RENOIR_COLOR_MASK_BLUE) res |= D3D11_COLOR_WRITE_ENABLE_BLUE;
+	if (color_mask & RENOIR_COLOR_MASK_ALPHA) res |= D3D11_COLOR_WRITE_ENABLE_ALPHA;
+	return res;
+}
+
+
 struct Renoir_Handle;
 
 struct Renoir_Compute_Write_Slot
@@ -2034,7 +2049,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			blend_desc.RenderTarget[i].SrcBlendAlpha = _renoir_blend_to_dx(desc.blend[i].src_alpha);
 			blend_desc.RenderTarget[i].DestBlendAlpha = _renoir_blend_to_dx(desc.blend[i].dst_alpha);
 			blend_desc.RenderTarget[i].BlendOpAlpha = _renoir_blend_eq_to_dx(desc.blend[i].eq_alpha);
-			blend_desc.RenderTarget[i].RenderTargetWriteMask = desc.blend[i].color_mask;
+			blend_desc.RenderTarget[i].RenderTargetWriteMask = _renoir_color_mask_to_dx(desc.blend[i].color_mask);
 			if (desc.independent_blend == RENOIR_SWITCH_DISABLE)
 				break;
 		}
@@ -3066,6 +3081,8 @@ operator==(const Renoir_Blend_Desc& a, const Renoir_Blend_Desc& b)
 		if (a.eq_alpha != b.eq_alpha)
 			return false;
 	}
+	if (a.color_mask != b.color_mask)
+		return false;
 	return true;
 }
 

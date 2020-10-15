@@ -2262,13 +2262,39 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 			}
 
-			glColorMaski(
-				i,
-				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_RED,
-				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_GREEN,
-				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_BLUE,
-				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_ALPHA
-			);
+			if (h->pipeline.desc.independent_blend == RENOIR_SWITCH_ENABLE)
+			{
+				if (h->pipeline.desc.blend[i].color_mask == RENOIR_COLOR_MASK_NONE)
+				{
+					glColorMaski(i, false, false, false, false);
+				}
+				else
+				{
+					glColorMaski(
+						i,
+						(h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_RED) != 0,
+						(h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_GREEN) != 0,
+						(h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_BLUE) != 0,
+						(h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_ALPHA) != 0
+					);
+				}
+			}
+			else
+			{
+				if (h->pipeline.desc.blend[i].color_mask == RENOIR_COLOR_MASK_NONE)
+				{
+					glColorMask(false, false, false, false);
+				}
+				else
+				{
+					glColorMask(
+						(h->pipeline.desc.blend[i].color_mask& RENOIR_COLOR_MASK_RED) != 0,
+						(h->pipeline.desc.blend[i].color_mask& RENOIR_COLOR_MASK_GREEN) != 0,
+						(h->pipeline.desc.blend[i].color_mask& RENOIR_COLOR_MASK_BLUE) != 0,
+						(h->pipeline.desc.blend[i].color_mask& RENOIR_COLOR_MASK_ALPHA) != 0
+					);
+				}
+			}
 
 			if (h->pipeline.desc.independent_blend == RENOIR_SWITCH_DISABLE)
 				break;

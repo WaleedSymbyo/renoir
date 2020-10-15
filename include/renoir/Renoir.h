@@ -184,6 +184,7 @@ typedef enum RENOIR_CUBE_FACE
 
 typedef enum RENOIR_COLOR_MASK
 {
+	RENOIR_COLOR_MASK_NONE = -1,
 	RENOIR_COLOR_MASK_DEFAULT = 0,
 	RENOIR_COLOR_MASK_RED = 1 << 0,
 	RENOIR_COLOR_MASK_GREEN = 1 << 1,
@@ -247,7 +248,7 @@ typedef struct Renoir_Blend_Desc {
 	RENOIR_BLEND dst_alpha; // default: RENOIR_BLEND_ONE_MINUS_SRC_ALPHA
 	RENOIR_BLEND_EQ eq_rgb; // default: RENOIR_BLEND_EQ_ADD
 	RENOIR_BLEND_EQ eq_alpha; // default: RENOIR_BLEND_EQ_ADD
-	RENOIR_COLOR_MASK color_mask; // default: RENOIR_COLOR_MASK_ALL
+	int color_mask; // default: RENOIR_COLOR_MASK_ALL
 } Renoir_Blend_Desc;
 
 typedef struct Renoir_Pipeline_Desc {
