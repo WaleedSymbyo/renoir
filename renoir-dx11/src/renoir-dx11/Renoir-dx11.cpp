@@ -407,7 +407,7 @@ struct Renoir_Handle
 			ID3D11RasterizerState* raster_state;
 			ID3D11BlendState* blend_state;
 		} pipeline;
-		
+
 		struct
 		{
 			ID3D11Query* start;
@@ -474,15 +474,6 @@ _renoir_dx11_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
 	if (desc->depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
 		desc->depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
-	if (desc->disabled_color_channels_mask & 0xFF000000)
-		desc->disabled_color_channels_mask |= 0xFF000000;
-	if (desc->disabled_color_channels_mask & 0x00FF0000)
-		desc->disabled_color_channels_mask |= 0x00FF0000;
-	if (desc->disabled_color_channels_mask & 0x0000FF00)
-		desc->disabled_color_channels_mask |= 0x0000FF00;
-	if (desc->disabled_color_channels_mask & 0x000000FF)
-		desc->disabled_color_channels_mask |= 0x000000FF;
-
 	if (desc->independent_blend == RENOIR_SWITCH_DEFAULT)
 		desc->independent_blend = RENOIR_SWITCH_DISABLE;
 
@@ -502,7 +493,10 @@ _renoir_dx11_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
 			desc->blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
 		if (desc->blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
 			desc->blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
-		
+
+		if (desc->blend[i].color_mask == RENOIR_COLOR_MASK_DEFAULT)
+			desc->blend[i].color_mask = RENOIR_COLOR_MASK_ALL;
+
 		if (desc->independent_blend == RENOIR_SWITCH_DISABLE)
 			break;
 	}
@@ -1245,7 +1239,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		h->raster_pass.offscreen = desc;
 
 		int msaa = -1;
-		
+
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
@@ -1396,12 +1390,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->pass_free.handle;
 		if (_renoir_dx11_handle_unref(h) == false)
 			break;
-		
+
 		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
 			for(auto it = h->raster_pass.command_list_head; it != NULL; it = it->next)
 				_renoir_dx11_command_free(self, command);
-			
+
 			// free all the bound textures if it's a framebuffer pass
 			if (h->raster_pass.swapchain == nullptr)
 			{
@@ -1410,7 +1404,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
 					if (color == nullptr)
 						continue;
-					
+
 					h->raster_pass.render_target_view[0]->Release();
 					// issue command to free the color texture
 					auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
@@ -1435,7 +1429,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			for(auto it = h->compute_pass.command_list_head; it != NULL; it = it->next)
 				_renoir_dx11_command_free(self, command);
-			
+
 			mn::buf_free(h->compute_pass.write_resources);
 		}
 
@@ -1460,7 +1454,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			buffer_desc.Usage = D3D11_USAGE_DEFAULT;
 		}
-		
+
 		if (desc.type == RENOIR_BUFFER_COMPUTE)
 		{
 			assert(
@@ -1620,7 +1614,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				if (desc.data[i] == nullptr)
 					continue;
-				
+
 				no_data = false;
 				data_desc[i].pSysMem = desc.data[i];
 				data_desc[i].SysMemPitch = desc.size.width * dx_pixelformat_size;
@@ -2040,7 +2034,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			blend_desc.RenderTarget[i].SrcBlendAlpha = _renoir_blend_to_dx(desc.blend[i].src_alpha);
 			blend_desc.RenderTarget[i].DestBlendAlpha = _renoir_blend_to_dx(desc.blend[i].dst_alpha);
 			blend_desc.RenderTarget[i].BlendOpAlpha = _renoir_blend_eq_to_dx(desc.blend[i].eq_alpha);
-			blend_desc.RenderTarget[i].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
+			blend_desc.RenderTarget[i].RenderTargetWriteMask = desc.blend[i].color_mask;
 			if (desc.independent_blend == RENOIR_SWITCH_DISABLE)
 				break;
 		}
@@ -2081,7 +2075,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->timer_free.handle;
 		if (_renoir_dx11_handle_unref(h) == false)
 			break;
-		
+
 		h->timer.frequency->Release();
 		h->timer.start->Release();
 		h->timer.end->Release();
@@ -2458,7 +2452,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		self->current_pipeline = command->use_pipeline.pipeline;
 
 		auto h = self->current_pipeline;
-		self->context->OMSetBlendState(h->pipeline.blend_state, nullptr, ~h->pipeline.desc.disabled_color_channels_mask);
+		self->context->OMSetBlendState(h->pipeline.blend_state, nullptr, 0xFFFFFFFF);
 		self->context->OMSetDepthStencilState(h->pipeline.depth_state, 1);
 		self->context->RSSetState(h->pipeline.raster_state);
 		break;
@@ -2860,7 +2854,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto& vertex_buffer = desc.vertex_buffers[i];
 			if (vertex_buffer.buffer.handle == nullptr)
 				continue;
-			
+
 			// calculate the default stride for the vertex buffer
 			if (vertex_buffer.stride == 0)
 				vertex_buffer.stride = _renoir_type_to_size(vertex_buffer.type);
@@ -2875,7 +2869,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			if (desc.index_type == RENOIR_TYPE_NONE)
 				desc.index_type = RENOIR_TYPE_UINT16;
-			
+
 			auto dx_type = _renoir_type_to_dx(desc.index_type);
 			auto dx_type_size = _renoir_type_to_size(desc.index_type);
 			auto hbuffer = (Renoir_Handle*)desc.index_buffer.handle;
@@ -3250,7 +3244,7 @@ _renoir_dx11_handle_leak_free(IRenoir* self, Renoir_Command* command)
 					auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
 					if (color == nullptr)
 						continue;
-					
+
 					// issue command to free the color texture
 					auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 					command->texture_free.handle = color;
@@ -3649,7 +3643,7 @@ _renoir_dx11_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 
 	if (desc.usage == RENOIR_USAGE_NONE)
 		desc.usage = RENOIR_USAGE_STATIC;
-	
+
 	if (desc.mipmaps == 0)
 		desc.mipmaps = 1;
 
@@ -4289,7 +4283,7 @@ _renoir_dx11_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, s
 	{
 		assert(false && "invalid pass");
 	}
-	
+
 }
 
 static void

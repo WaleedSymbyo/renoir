@@ -737,15 +737,6 @@ _renoir_gl450_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
 	if (desc->depth_stencil.depth_write_mask == RENOIR_SWITCH_DEFAULT)
 		desc->depth_stencil.depth_write_mask = RENOIR_SWITCH_ENABLE;
 
-	if (desc->disabled_color_channels_mask & 0xFF000000)
-		desc->disabled_color_channels_mask |= 0xFF000000;
-	if (desc->disabled_color_channels_mask & 0x00FF0000)
-		desc->disabled_color_channels_mask |= 0x00FF0000;
-	if (desc->disabled_color_channels_mask & 0x0000FF00)
-		desc->disabled_color_channels_mask |= 0x0000FF00;
-	if (desc->disabled_color_channels_mask & 0x000000FF)
-		desc->disabled_color_channels_mask |= 0x000000FF;
-
 	if (desc->independent_blend == RENOIR_SWITCH_DEFAULT)
 		desc->independent_blend = RENOIR_SWITCH_DISABLE;
 
@@ -765,7 +756,10 @@ _renoir_gl450_pipeline_desc_defaults(Renoir_Pipeline_Desc* desc)
 			desc->blend[i].eq_rgb = RENOIR_BLEND_EQ_ADD;
 		if (desc->blend[i].eq_alpha == RENOIR_BLEND_EQ_NONE)
 			desc->blend[i].eq_alpha = RENOIR_BLEND_EQ_ADD;
-		
+
+		if (desc->blend[i].color_mask == RENOIR_COLOR_MASK_DEFAULT)
+			desc->blend[i].color_mask = RENOIR_COLOR_MASK_ALL;
+
 		if (desc->independent_blend == RENOIR_SWITCH_DISABLE)
 			break;
 	}
@@ -1414,7 +1408,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto& desc = command->pass_offscreen_new.desc;
 
 		int msaa = -1;
-		
+
 		glCreateFramebuffers(1, &h->raster_pass.fb);
 		GLenum attachments[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE] = {};
 		int attachments_count = 0;
@@ -1539,12 +1533,12 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->pass_free.handle;
 		if (_renoir_gl450_handle_unref(h) == false)
 			break;
-		
+
 		if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
 		{
 			for(auto it = h->raster_pass.command_list_head; it != NULL; it = it->next)
 				_renoir_gl450_command_free(self, command);
-			
+
 			// free all the bound textures if it's a framebuffer pass
 			if (h->raster_pass.fb != 0)
 			{
@@ -1553,7 +1547,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
 					if (color == nullptr)
 						continue;
-					
+
 					// issue command to free the color texture
 					auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 					command->texture_free.handle = color;
@@ -2233,13 +2227,6 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glDepthMask(GL_FALSE);
 		}
 
-		glColorMask(
-			~(h->pipeline.desc.disabled_color_channels_mask & 0xFF000000),
-			~(h->pipeline.desc.disabled_color_channels_mask & 0x00FF0000),
-			~(h->pipeline.desc.disabled_color_channels_mask & 0x0000FF00),
-			~(h->pipeline.desc.disabled_color_channels_mask & 0x000000FF)
-		);
-
 		for (int i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			if (h->pipeline.desc.blend[i].enabled == RENOIR_SWITCH_ENABLE)
@@ -2274,6 +2261,14 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 					glDisable(GL_BLEND);
 				}
 			}
+
+			glColorMaski(
+				i,
+				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_RED,
+				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_GREEN,
+				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_BLUE,
+				h->pipeline.desc.blend[i].color_mask & RENOIR_COLOR_MASK_ALPHA
+			);
 
 			if (h->pipeline.desc.independent_blend == RENOIR_SWITCH_DISABLE)
 				break;
@@ -2784,7 +2779,7 @@ _renoir_gl450_handle_leak_free(IRenoir* self, Renoir_Command* command)
 					auto color = (Renoir_Handle*)h->raster_pass.offscreen.color[i].texture.handle;
 					if (color == nullptr)
 						continue;
-					
+
 					// issue command to free the color texture
 					auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 					command->texture_free.handle = color;

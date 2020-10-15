@@ -182,6 +182,19 @@ typedef enum RENOIR_CUBE_FACE
 	RENOIR_CUBE_FACE_NEG_Z
 } RENOIR_CUBE_FACE;
 
+typedef enum RENOIR_COLOR_MASK
+{
+	RENOIR_COLOR_MASK_DEFAULT = 0,
+	RENOIR_COLOR_MASK_RED = 1 << 0,
+	RENOIR_COLOR_MASK_GREEN = 1 << 1,
+	RENOIR_COLOR_MASK_BLUE = 1 << 2,
+	RENOIR_COLOR_MASK_ALPHA = 1 << 3,
+	RENOIR_COLOR_MASK_ALL = RENOIR_COLOR_MASK_RED |
+							RENOIR_COLOR_MASK_GREEN |
+							RENOIR_COLOR_MASK_BLUE |
+							RENOIR_COLOR_MASK_ALPHA,
+} RENOIR_COLOR_MASK;
+
 // Handles
 typedef struct Renoir_Buffer { void* handle; } Renoir_Buffer;
 typedef struct Renoir_Texture { void* handle; } Renoir_Texture;
@@ -234,16 +247,12 @@ typedef struct Renoir_Blend_Desc {
 	RENOIR_BLEND dst_alpha; // default: RENOIR_BLEND_ONE_MINUS_SRC_ALPHA
 	RENOIR_BLEND_EQ eq_rgb; // default: RENOIR_BLEND_EQ_ADD
 	RENOIR_BLEND_EQ eq_alpha; // default: RENOIR_BLEND_EQ_ADD
+	RENOIR_COLOR_MASK color_mask; // default: RENOIR_COLOR_MASK_ALL
 } Renoir_Blend_Desc;
 
 typedef struct Renoir_Pipeline_Desc {
 	Renoir_Rasterizer_Desc rasterizer;
 	Renoir_Depth_Desc depth_stencil;
-	// default: 0x00000000 (write to all channels), any value other than zero per byte/channel = true (disabled)
-	// examples:
-	// to disable all color channels: 0xFFFFFFFF
-	// to disable first channel: 0xFF000000
-	uint32_t disabled_color_channels_mask;
 	RENOIR_SWITCH independent_blend; // default: RENOIR_SWITCH_DISABLE
 	Renoir_Blend_Desc blend[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE];
 } Pipeline_Desc;
