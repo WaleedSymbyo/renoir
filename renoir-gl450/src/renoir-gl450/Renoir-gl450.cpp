@@ -1620,6 +1620,16 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto gl_format = _renoir_pixelformat_to_gl(desc.pixel_format);
 		auto gl_type = _renoir_pixelformat_to_type_gl(desc.pixel_format);
 
+		// change alignment to match pixel data
+		GLint original_pack_alignment = 0;
+		glGetIntegerv(GL_UNPACK_ALIGNMENT, &original_pack_alignment);
+		if (desc.pixel_format == RENOIR_PIXELFORMAT_R8)
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		mn_defer({
+			if (desc.pixel_format == RENOIR_PIXELFORMAT_R8)
+				glPixelStorei(GL_UNPACK_ALIGNMENT, original_pack_alignment);
+		});
+
 		if (desc.size.height == 0 && desc.size.depth == 0)
 		{
 			glCreateTextures(GL_TEXTURE_1D, 1, &h->texture.id);
@@ -2344,6 +2354,17 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->texture_write.handle;
 		auto gl_format = _renoir_pixelformat_to_gl(h->texture.pixel_format);
 		auto gl_type = _renoir_pixelformat_to_type_gl(h->texture.pixel_format);
+
+		// change alignment to match pixel data
+		GLint original_pack_alignment = 0;
+		glGetIntegerv(GL_UNPACK_ALIGNMENT, &original_pack_alignment);
+		if (h->texture.pixel_format == RENOIR_PIXELFORMAT_R8)
+			glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
+		mn_defer({
+			if (h->texture.pixel_format == RENOIR_PIXELFORMAT_R8)
+				glPixelStorei(GL_UNPACK_ALIGNMENT, original_pack_alignment);
+		});
+
 		if (h->texture.size.height == 0 && h->texture.size.depth == 0)
 		{
 			// 1D texture
@@ -2439,6 +2460,17 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->texture_read.handle;
 		auto gl_format = _renoir_pixelformat_to_gl(h->texture.pixel_format);
 		auto gl_type = _renoir_pixelformat_to_type_gl(h->texture.pixel_format);
+
+		// change alignment to match pixel data
+		GLint original_pack_alignment = 0;
+		glGetIntegerv(GL_PACK_ALIGNMENT, &original_pack_alignment);
+		if (h->texture.pixel_format == RENOIR_PIXELFORMAT_R8)
+			glPixelStorei(GL_PACK_ALIGNMENT, 1);
+		mn_defer({
+			if (h->texture.pixel_format == RENOIR_PIXELFORMAT_R8)
+				glPixelStorei(GL_PACK_ALIGNMENT, original_pack_alignment);
+		});
+
 		if (h->texture.size.height == 0 && h->texture.size.depth == 0)
 		{
 			// 1D texture
