@@ -1846,7 +1846,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		);
 		if (FAILED(res))
 		{
-			mn::log_error("vertex shader compile error\n{}", error->GetBufferPointer());
+			mn::log_error("vertex shader compile error\n{}", (char *)error->GetBufferPointer());
 			break;
 		}
 		res = self->device->CreateVertexShader(
@@ -1873,7 +1873,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		);
 		if (FAILED(res))
 		{
-			mn::log_error("pixel shader compile error\n{}", error->GetBufferPointer());
+			mn::log_error("pixel shader compile error\n{}", (char *)error->GetBufferPointer());
 			break;
 		}
 		res = self->device->CreatePixelShader(
@@ -1903,7 +1903,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			);
 			if (FAILED(res))
 			{
-				mn::log_error("geometry shader compile error\n{}", error->GetBufferPointer());
+				mn::log_error("geometry shader compile error\n{}", (char *)error->GetBufferPointer());
 				break;
 			}
 			res = self->device->CreateGeometryShader(
@@ -1953,7 +1953,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		);
 		if (FAILED(res))
 		{
-			mn::log_error("compute shader compile error\n{}", error->GetBufferPointer());
+			mn::log_error("compute shader compile error\n{}", (char *)error->GetBufferPointer());
 			break;
 		}
 		res = self->device->CreateComputeShader(
