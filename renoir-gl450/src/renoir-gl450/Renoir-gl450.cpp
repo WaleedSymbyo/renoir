@@ -2566,12 +2566,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			auto gl_format = _renoir_pixelformat_to_gl_compute(h->texture.pixel_format);
 			auto gl_gpu_access = _renoir_access_to_gl(command->texture_bind.gpu_access);
+			auto layered = GL_FALSE;
+			if (h->texture.size.depth > 0)
+				layered = GL_TRUE;
 
 			glBindImageTexture(
 				command->texture_bind.slot,
 				h->texture.id,
 				0,
-				GL_FALSE,
+				layered,
 				0,
 				gl_gpu_access,
 				gl_format
