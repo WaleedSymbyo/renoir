@@ -1620,7 +1620,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			texture_desc.Format = dx_pixelformat;
 			texture_desc.SampleDesc.Count = 1;
 			if (h->texture.mipmaps > 1)
-				texture_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
+				texture_desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
+			if (h->texture.cube_map)
+				texture_desc.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
 
 			bool no_data = true;
 			D3D11_SUBRESOURCE_DATA data_desc[6];
@@ -1658,10 +1660,15 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				view_desc.Format = dx_shader_view_pixelformat;
 			}
 			if (h->texture.cube_map == false)
+			{
 				view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+				view_desc.Texture2D.MipLevels = texture_desc.MipLevels;
+			}
 			else
+			{
 				view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURECUBE;
-			view_desc.Texture2D.MipLevels = texture_desc.MipLevels;
+				view_desc.TextureCube.MipLevels = texture_desc.MipLevels;
+			}
 			auto res = self->device->CreateShaderResourceView(h->texture.texture2d, &view_desc, &h->texture.shader_view);
 			assert(SUCCEEDED(res));
 
@@ -1670,9 +1677,14 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
 				uav_desc.Format = dx_pixelformat;
 				if (h->texture.cube_map == false)
+				{
 					uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+				}
 				else
+				{
 					uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+					uav_desc.Texture2DArray.ArraySize = 6;
+				}
 				auto res = self->device->CreateUnorderedAccessView(h->texture.texture2d, &uav_desc, &h->texture.uav);
 				assert(SUCCEEDED(res));
 			}
@@ -2212,7 +2224,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 						dx_pixel_format
 					);
 				}
-				else
+
+				// schedule copy on staging cpu read access
+				if (h->texture.access == RENOIR_ACCESS_READ || h->texture.access == RENOIR_ACCESS_READ_WRITE)
 				{
 					if (color->texture.texture2d)
 					{
@@ -2260,7 +2274,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 						dx_pixel_format
 					);
 				}
-				else
+				// schedule copy on staging cpu read access
+				if (h->texture.access == RENOIR_ACCESS_READ || h->texture.access == RENOIR_ACCESS_READ_WRITE)
 				{
 					if (depth->texture.texture2d)
 					{
