@@ -1751,6 +1751,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
 			uav_desc.Format = dx_pixelformat;
 			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+			uav_desc.Texture3D.WSize = h->texture.size.depth;
 			res = self->device->CreateUnorderedAccessView(h->texture.texture3d, &uav_desc, &h->texture.uav);
 			assert(SUCCEEDED(res));
 
