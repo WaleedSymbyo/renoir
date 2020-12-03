@@ -292,6 +292,9 @@ _renoir_pixelformat_to_internal_gl(RENOIR_PIXELFORMAT format)
 	case RENOIR_PIXELFORMAT_R32G32F:
 		res = GL_RG32F;
 		break;
+	case RENOIR_PIXELFORMAT_R32G32B32A32F:
+		res = GL_RGBA32F;
+		break;
 	case RENOIR_PIXELFORMAT_D24S8:
 		res = GL_DEPTH24_STENCIL8;
 		break;
@@ -329,6 +332,9 @@ _renoir_pixelformat_to_gl(RENOIR_PIXELFORMAT format)
 	case RENOIR_PIXELFORMAT_R32G32F:
 		res = GL_RG;
 		break;
+	case RENOIR_PIXELFORMAT_R32G32B32A32F:
+		res = GL_RGBA;
+		break;
 	case RENOIR_PIXELFORMAT_D32:
 		res = GL_DEPTH_COMPONENT;
 		break;
@@ -357,6 +363,7 @@ _renoir_pixelformat_to_type_gl(RENOIR_PIXELFORMAT format)
 		break;
 	case RENOIR_PIXELFORMAT_R32F:
 	case RENOIR_PIXELFORMAT_R32G32F:
+	case RENOIR_PIXELFORMAT_R32G32B32A32F:
 	case RENOIR_PIXELFORMAT_R16G16B16A16F:
 	case RENOIR_PIXELFORMAT_R16F:
 		res = GL_FLOAT;
@@ -397,6 +404,9 @@ _renoir_pixelformat_to_gl_compute(RENOIR_PIXELFORMAT format)
 		break;
 	case RENOIR_PIXELFORMAT_R32G32F:
 		res = GL_RG32F;
+		break;
+	case RENOIR_PIXELFORMAT_R32G32B32A32F:
+		res = GL_RGBA32F;
 		break;
 	case RENOIR_PIXELFORMAT_D24S8:
 	case RENOIR_PIXELFORMAT_D32:
