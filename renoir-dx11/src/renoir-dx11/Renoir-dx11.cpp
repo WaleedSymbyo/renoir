@@ -2497,6 +2497,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		self->context->PSSetShader(h->program.pixel_shader, NULL, 0);
 		if (h->program.geometry_shader)
 			self->context->GSSetShader(h->program.geometry_shader, NULL, 0);
+		else
+			self->context->GSSetShader(NULL, NULL, 0);
 		if (h->program.input_layout)
 			self->context->IASetInputLayout(h->program.input_layout);
 		break;
