@@ -1422,7 +1422,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					if (color == nullptr)
 						continue;
 
-					h->raster_pass.render_target_view[0]->Release();
+					h->raster_pass.render_target_view[i]->Release();
 					// issue command to free the color texture
 					auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_FREE);
 					command->texture_free.handle = color;
