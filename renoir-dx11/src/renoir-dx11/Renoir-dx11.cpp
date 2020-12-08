@@ -2228,14 +2228,14 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 
 				// schedule copy on staging cpu read access
-				if (h->texture.access == RENOIR_ACCESS_READ || h->texture.access == RENOIR_ACCESS_READ_WRITE)
+				if (color->texture.access == RENOIR_ACCESS_READ || color->texture.access == RENOIR_ACCESS_READ_WRITE)
 				{
 					if (color->texture.texture2d)
 					{
 						auto subresource = D3D11CalcSubresource(
 							h->raster_pass.offscreen.color[i].level,
 							h->raster_pass.offscreen.color[i].subresource,
-							h->texture.mipmaps
+							color->texture.mipmaps
 						);
 						D3D11_BOX src_box{};
 						src_box.left = 0;
@@ -2244,12 +2244,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 						src_box.bottom = color->texture.size.height;
 						src_box.back = 1;
 						self->context->CopySubresourceRegion(
-							h->texture.texture2d_staging,
+							color->texture.texture2d_staging,
 							subresource,
 							0,
 							0,
 							0,
-							h->texture.texture2d,
+							color->texture.texture2d,
 							subresource,
 							&src_box
 						);
@@ -2277,14 +2277,14 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					);
 				}
 				// schedule copy on staging cpu read access
-				if (h->texture.access == RENOIR_ACCESS_READ || h->texture.access == RENOIR_ACCESS_READ_WRITE)
+				if (depth->texture.access == RENOIR_ACCESS_READ || depth->texture.access == RENOIR_ACCESS_READ_WRITE)
 				{
 					if (depth->texture.texture2d)
 					{
 						auto subresource = D3D11CalcSubresource(
 							h->raster_pass.offscreen.depth_stencil.level,
 							h->raster_pass.offscreen.depth_stencil.subresource,
-							h->texture.mipmaps
+							depth->texture.mipmaps
 						);
 						D3D11_BOX src_box{};
 						src_box.left = 0;
@@ -2293,12 +2293,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 						src_box.bottom = depth->texture.size.height;
 						src_box.back = 1;
 						self->context->CopySubresourceRegion(
-							h->texture.texture2d_staging,
+							depth->texture.texture2d_staging,
 							subresource,
 							0,
 							0,
 							0,
-							h->texture.texture2d,
+							depth->texture.texture2d,
 							subresource,
 							&src_box
 						);
@@ -4411,7 +4411,7 @@ _renoir_dx11_texture_read(Renoir* api, Renoir_Texture texture, Renoir_Texture_Ed
 	auto h = (Renoir_Handle*)texture.handle;
 	assert(h != nullptr);
 	// this means that texture creation didn't execute yet
-	if (h->texture.texture1d == nullptr || h->texture.texture2d == nullptr || h->texture.texture3d == nullptr)
+	if (h->texture.texture1d == nullptr && h->texture.texture2d == nullptr && h->texture.texture3d == nullptr)
 	{
 		::memset(desc.bytes, 0, desc.bytes_size);
 		return;
