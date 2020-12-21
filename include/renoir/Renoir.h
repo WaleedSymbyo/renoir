@@ -381,7 +381,8 @@ typedef struct Renoir
 	Renoir_Texture (*texture_new)(struct Renoir* api, Renoir_Texture_Desc desc);
 	void (*texture_free)(struct Renoir* api, Renoir_Texture texture);
 	void* (*texture_native_handle)(struct Renoir* api, Renoir_Texture texture);
-	Renoir_Size (*texture_size)(struct Renoir* api, Renoir_Texture texutre);
+	Renoir_Size (*texture_size)(struct Renoir* api, Renoir_Texture texture);
+	Renoir_Texture_Desc (*texture_desc)(struct Renoir* api, Renoir_Texture texture);
 
 	Renoir_Program (*program_new)(struct Renoir* api, Renoir_Program_Desc desc);
 	void (*program_free)(struct Renoir* api, Renoir_Program program);

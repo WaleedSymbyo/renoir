@@ -380,21 +380,13 @@ struct Renoir_Handle
 			ID3D11Texture3D* texture3d;
 			ID3D11ShaderResourceView* shader_view;
 			ID3D11UnorderedAccessView* uav;
-			Renoir_Size size;
-			RENOIR_USAGE usage;
-			RENOIR_ACCESS access;
-			Renoir_Sampler_Desc default_sampler_desc;
-			RENOIR_PIXELFORMAT pixel_format;
-			int mipmaps;
-			bool cube_map;
 			// staging part (for fast CPU writes)
 			ID3D11Texture1D* texture1d_staging;
 			ID3D11Texture2D* texture2d_staging;
 			ID3D11Texture3D* texture3d_staging;
 			// render target part
-			bool render_target;
-			RENOIR_MSAA_MODE msaa;
 			ID3D11Texture2D* render_color_buffer;
+			Renoir_Texture_Desc desc;
 		} texture;
 
 		struct
@@ -1262,15 +1254,15 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
-			assert(color->texture.render_target);
+			assert(color->texture.desc.render_target);
 
 			_renoir_dx11_handle_ref(color);
 
-			auto dx_format = _renoir_pixelformat_to_dx(color->texture.pixel_format);
+			auto dx_format = _renoir_pixelformat_to_dx(color->texture.desc.pixel_format);
 
-			if (color->texture.cube_map == false)
+			if (color->texture.desc.cube_map == false)
 			{
-				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				if (color->texture.desc.msaa != RENOIR_MSAA_MODE_NONE)
 				{
 					assert(desc.color[i].level == 0 && "multisampled textures does not support mipmaps");
 					auto res = self->device->CreateRenderTargetView(color->texture.render_color_buffer, nullptr, &h->raster_pass.render_target_view[i]);
@@ -1278,7 +1270,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 				else
 				{
-					assert(desc.color[i].level < color->texture.mipmaps && "out of range mip level");
+					assert(desc.color[i].level < color->texture.desc.mipmaps && "out of range mip level");
 					D3D11_RENDER_TARGET_VIEW_DESC render_target_desc{};
 					render_target_desc.Format = dx_format;
 					render_target_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
@@ -1289,7 +1281,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 			else
 			{
-				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				if (color->texture.desc.msaa != RENOIR_MSAA_MODE_NONE)
 				{
 					assert(desc.color[i].level == 0 && "multisampled textures does not support mipmaps");
 					D3D11_RENDER_TARGET_VIEW_DESC render_target_desc{};
@@ -1302,7 +1294,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 				else
 				{
-					assert(desc.color[i].level < color->texture.mipmaps && "out of range mip level");
+					assert(desc.color[i].level < color->texture.desc.mipmaps && "out of range mip level");
 					D3D11_RENDER_TARGET_VIEW_DESC render_target_desc{};
 					render_target_desc.Format = dx_format;
 					render_target_desc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2DARRAY;
@@ -1317,25 +1309,25 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			// check that all of them has the same msaa
 			if (msaa == -1)
 			{
-				msaa = color->texture.msaa;
+				msaa = color->texture.desc.msaa;
 			}
 			else
 			{
-				assert(msaa == color->texture.msaa);
+				assert(msaa == color->texture.desc.msaa);
 			}
 		}
 
 		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
 		if (depth)
 		{
-			assert(depth->texture.render_target);
+			assert(depth->texture.desc.render_target);
 			_renoir_dx11_handle_ref(depth);
-			if (depth->texture.cube_map == false)
+			if (depth->texture.desc.cube_map == false)
 			{
-				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				if (depth->texture.desc.msaa != RENOIR_MSAA_MODE_NONE)
 				{
 					assert(desc.depth_stencil.level == 0 && "multisampled textures does not support mipmaps");
-					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.desc.pixel_format);
 					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
 					depth_view_desc.Format = dx_format;
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMS;
@@ -1344,8 +1336,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 				else
 				{
-					assert(desc.depth_stencil.level < depth->texture.mipmaps && "out of range mip level");
-					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					assert(desc.depth_stencil.level < depth->texture.desc.mipmaps && "out of range mip level");
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.desc.pixel_format);
 					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
 					depth_view_desc.Format = dx_format;
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2D;
@@ -1356,10 +1348,10 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			}
 			else
 			{
-				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				if (depth->texture.desc.msaa != RENOIR_MSAA_MODE_NONE)
 				{
 					assert(desc.depth_stencil.level == 0 && "multisampled textures does not support mipmaps");
-					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.desc.pixel_format);
 					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
 					depth_view_desc.Format = dx_format;
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DMSARRAY;
@@ -1370,8 +1362,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 				else
 				{
-					assert(desc.depth_stencil.level < depth->texture.mipmaps && "out of range mip level");
-					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.pixel_format);
+					assert(desc.depth_stencil.level < depth->texture.desc.mipmaps && "out of range mip level");
+					auto dx_format = _renoir_pixelformat_depth_to_dx_depth_view(depth->texture.desc.pixel_format);
 					D3D11_DEPTH_STENCIL_VIEW_DESC depth_view_desc{};
 					depth_view_desc.Format = dx_format;
 					depth_view_desc.ViewDimension = D3D11_DSV_DIMENSION_TEXTURE2DARRAY;
@@ -1386,11 +1378,11 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			// check that all of them has the same msaa
 			if (msaa == -1)
 			{
-				msaa = depth->texture.msaa;
+				msaa = depth->texture.desc.msaa;
 			}
 			else
 			{
-				assert(msaa == depth->texture.msaa);
+				assert(msaa == depth->texture.desc.msaa);
 			}
 		}
 		break;
@@ -1551,12 +1543,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			D3D11_TEXTURE1D_DESC texture_desc{};
 			texture_desc.ArraySize = 1;
 			texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-			texture_desc.MipLevels = h->texture.mipmaps;
+			texture_desc.MipLevels = h->texture.desc.mipmaps;
 			texture_desc.Width = desc.size.width;
 			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				texture_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
 			if (desc.data[0])
@@ -1596,14 +1588,14 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			res = self->device->CreateUnorderedAccessView(h->texture.texture1d, &uav_desc, &h->texture.uav);
 			assert(SUCCEEDED(res));
 
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		else if (desc.size.height > 0 && desc.size.depth == 0)
 		{
 			D3D11_TEXTURE2D_DESC texture_desc{};
-			texture_desc.ArraySize = h->texture.cube_map ? 6 : 1;
-			if (h->texture.render_target)
+			texture_desc.ArraySize = h->texture.desc.cube_map ? 6 : 1;
+			if (h->texture.desc.render_target)
 			{
 				if (_renoir_pixelformat_is_depth(desc.pixel_format) == false)
 					texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -1614,16 +1606,16 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 			}
-			texture_desc.MipLevels = h->texture.mipmaps;
+			texture_desc.MipLevels = h->texture.desc.mipmaps;
 			texture_desc.Width = desc.size.width;
 			texture_desc.Height = desc.size.height;
 			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 			texture_desc.SampleDesc.Count = 1;
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				texture_desc.MiscFlags |= D3D11_RESOURCE_MISC_GENERATE_MIPS;
-			if (h->texture.cube_map)
+			if (h->texture.desc.cube_map)
 				texture_desc.MiscFlags |= D3D11_RESOURCE_MISC_TEXTURECUBE;
 
 			bool no_data = true;
@@ -1661,7 +1653,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				auto dx_shader_view_pixelformat = _renoir_pixelformat_depth_to_dx_shader_view(desc.pixel_format);
 				view_desc.Format = dx_shader_view_pixelformat;
 			}
-			if (h->texture.cube_map == false)
+			if (h->texture.desc.cube_map == false)
 			{
 				view_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
 				view_desc.Texture2D.MipLevels = texture_desc.MipLevels;
@@ -1678,7 +1670,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			{
 				D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
 				uav_desc.Format = dx_pixelformat;
-				if (h->texture.cube_map == false)
+				if (h->texture.desc.cube_map == false)
 				{
 					uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
 				}
@@ -1697,7 +1689,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 				// create the msaa rendertarget
 				D3D11_TEXTURE2D_DESC texture_desc{};
-				texture_desc.ArraySize = h->texture.cube_map ? 6 : 1;
+				texture_desc.ArraySize = h->texture.desc.cube_map ? 6 : 1;
 				if (_renoir_pixelformat_is_depth(desc.pixel_format) == false)
 					texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET;
 				else
@@ -1723,21 +1715,21 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(SUCCEEDED(res));
 			}
 
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		else if (desc.size.height > 0 && desc.size.depth > 0)
 		{
 			D3D11_TEXTURE3D_DESC texture_desc{};
 			texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
-			texture_desc.MipLevels = h->texture.mipmaps;
+			texture_desc.MipLevels = h->texture.desc.mipmaps;
 			texture_desc.Width = desc.size.width;
 			texture_desc.Height = desc.size.height;
 			texture_desc.Depth = desc.size.depth;
 			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				texture_desc.MiscFlags = D3D11_RESOURCE_MISC_GENERATE_MIPS;
 
 			if (desc.data[0])
@@ -1765,7 +1757,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
 			uav_desc.Format = dx_pixelformat;
 			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
-			uav_desc.Texture3D.WSize = h->texture.size.depth;
+			uav_desc.Texture3D.WSize = h->texture.desc.size.depth;
 			res = self->device->CreateUnorderedAccessView(h->texture.texture3d, &uav_desc, &h->texture.uav);
 			assert(SUCCEEDED(res));
 
@@ -1779,7 +1771,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(SUCCEEDED(res));
 			}
 
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		break;
@@ -2215,9 +2207,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					continue;
 
 				// only resolve msaa textures
-				if (color->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				if (color->texture.desc.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					auto dx_pixel_format = _renoir_pixelformat_to_dx(color->texture.pixel_format);
+					auto dx_pixel_format = _renoir_pixelformat_to_dx(color->texture.desc.pixel_format);
 					self->context->ResolveSubresource(
 						color->texture.texture2d,
 						h->raster_pass.offscreen.color[i].subresource,
@@ -2228,20 +2220,20 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 
 				// schedule copy on staging cpu read access
-				if (color->texture.access == RENOIR_ACCESS_READ || color->texture.access == RENOIR_ACCESS_READ_WRITE)
+				if (color->texture.desc.access == RENOIR_ACCESS_READ || color->texture.desc.access == RENOIR_ACCESS_READ_WRITE)
 				{
 					if (color->texture.texture2d)
 					{
 						auto subresource = D3D11CalcSubresource(
 							h->raster_pass.offscreen.color[i].level,
 							h->raster_pass.offscreen.color[i].subresource,
-							color->texture.mipmaps
+							color->texture.desc.mipmaps
 						);
 						D3D11_BOX src_box{};
 						src_box.left = 0;
-						src_box.right = color->texture.size.width;
+						src_box.right = color->texture.desc.size.width;
 						src_box.top = 0;
-						src_box.bottom = color->texture.size.height;
+						src_box.bottom = color->texture.desc.size.height;
 						src_box.back = 1;
 						self->context->CopySubresourceRegion(
 							color->texture.texture2d_staging,
@@ -2265,9 +2257,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto depth = (Renoir_Handle*)h->raster_pass.offscreen.depth_stencil.texture.handle;
 			if (depth)
 			{
-				if (depth->texture.msaa != RENOIR_MSAA_MODE_NONE)
+				if (depth->texture.desc.msaa != RENOIR_MSAA_MODE_NONE)
 				{
-					auto dx_pixel_format = _renoir_pixelformat_to_dx(depth->texture.pixel_format);
+					auto dx_pixel_format = _renoir_pixelformat_to_dx(depth->texture.desc.pixel_format);
 					self->context->ResolveSubresource(
 						depth->texture.texture2d,
 						h->raster_pass.offscreen.depth_stencil.subresource,
@@ -2277,20 +2269,20 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					);
 				}
 				// schedule copy on staging cpu read access
-				if (depth->texture.access == RENOIR_ACCESS_READ || depth->texture.access == RENOIR_ACCESS_READ_WRITE)
+				if (depth->texture.desc.access == RENOIR_ACCESS_READ || depth->texture.desc.access == RENOIR_ACCESS_READ_WRITE)
 				{
 					if (depth->texture.texture2d)
 					{
 						auto subresource = D3D11CalcSubresource(
 							h->raster_pass.offscreen.depth_stencil.level,
 							h->raster_pass.offscreen.depth_stencil.subresource,
-							depth->texture.mipmaps
+							depth->texture.desc.mipmaps
 						);
 						D3D11_BOX src_box{};
 						src_box.left = 0;
-						src_box.right = depth->texture.size.width;
+						src_box.right = depth->texture.desc.size.width;
 						src_box.top = 0;
-						src_box.bottom = depth->texture.size.height;
+						src_box.bottom = depth->texture.desc.size.height;
 						src_box.back = 1;
 						self->context->CopySubresourceRegion(
 							depth->texture.texture2d_staging,
@@ -2342,13 +2334,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 				else if (hres->kind == RENOIR_HANDLE_KIND_TEXTURE)
 				{
-					if (hres->texture.access == RENOIR_ACCESS_READ || hres->texture.access == RENOIR_ACCESS_READ_WRITE)
+					if (hres->texture.desc.access == RENOIR_ACCESS_READ || hres->texture.desc.access == RENOIR_ACCESS_READ_WRITE)
 					{
 						if (hres->texture.texture1d)
 						{
 							D3D11_BOX src_box{};
 							src_box.left = 0;
-							src_box.right = hres->texture.size.width;
+							src_box.right = hres->texture.desc.size.width;
 							src_box.bottom = 1;
 							src_box.back = 1;
 							self->context->CopySubresourceRegion(
@@ -2364,13 +2356,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 						}
 						else if (hres->texture.texture2d)
 						{
-							if (hres->texture.cube_map == false)
+							if (hres->texture.desc.cube_map == false)
 							{
 								D3D11_BOX src_box{};
 								src_box.left = 0;
-								src_box.right = hres->texture.size.width;
+								src_box.right = hres->texture.desc.size.width;
 								src_box.top = 0;
-								src_box.bottom = hres->texture.size.height;
+								src_box.bottom = hres->texture.desc.size.height;
 								src_box.back = 1;
 								self->context->CopySubresourceRegion(
 									hres->texture.texture2d_staging,
@@ -2389,9 +2381,9 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 								{
 									D3D11_BOX src_box{};
 									src_box.left = 0;
-									src_box.right = hres->texture.size.width;
+									src_box.right = hres->texture.desc.size.width;
 									src_box.top = 0;
-									src_box.bottom = hres->texture.size.height;
+									src_box.bottom = hres->texture.desc.size.height;
 									src_box.back = 1;
 									self->context->CopySubresourceRegion(
 										hres->texture.texture2d_staging,
@@ -2410,11 +2402,11 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 						{
 							D3D11_BOX src_box{};
 							src_box.left = 0;
-							src_box.right = hres->texture.size.width;
+							src_box.right = hres->texture.desc.size.width;
 							src_box.top = 0;
-							src_box.bottom = hres->texture.size.height;
+							src_box.bottom = hres->texture.desc.size.height;
 							src_box.front = 0;
-							src_box.back = hres->texture.size.depth;
+							src_box.back = hres->texture.desc.size.depth;
 							self->context->CopySubresourceRegion(
 								h->texture.texture3d_staging,
 								0,
@@ -2565,12 +2557,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->texture_write.handle;
 		auto& desc = command->texture_write.desc;
 
-		auto dx_pixel_size = _renoir_pixelformat_to_size(h->texture.pixel_format);
+		auto dx_pixel_size = _renoir_pixelformat_to_size(h->texture.desc.pixel_format);
 
 		if (h->texture.texture1d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto subresource = D3D11CalcSubresource(0, 0, h->texture.mipmaps);
+			auto subresource = D3D11CalcSubresource(0, 0, h->texture.desc.mipmaps);
 			auto res = self->context->Map(h->texture.texture1d_staging, subresource, D3D11_MAP_WRITE, 0, &mapped_resource);
 			assert(SUCCEEDED(res));
 			::memcpy(
@@ -2595,16 +2587,16 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				subresource,
 				&src_box
 			);
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		else if (h->texture.texture2d)
 		{
-			if (h->texture.cube_map == false)
+			if (h->texture.desc.cube_map == false)
 				desc.z = 0;
 
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto subresource = D3D11CalcSubresource(0, desc.z, h->texture.mipmaps);
+			auto subresource = D3D11CalcSubresource(0, desc.z, h->texture.desc.mipmaps);
 			auto res = self->context->Map(h->texture.texture2d_staging, subresource, D3D11_MAP_WRITE, 0, &mapped_resource);
 			assert(SUCCEEDED(res));
 
@@ -2639,13 +2631,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				subresource,
 				&src_box
 			);
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		else if (h->texture.texture3d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto subresource = D3D11CalcSubresource(0, 0, h->texture.mipmaps);
+			auto subresource = D3D11CalcSubresource(0, 0, h->texture.desc.mipmaps);
 			auto res = self->context->Map(h->texture.texture3d_staging, subresource, D3D11_MAP_WRITE, 0, &mapped_resource);
 			assert(SUCCEEDED(res));
 
@@ -2686,7 +2678,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				subresource,
 				&src_box
 			);
-			if (h->texture.mipmaps > 1)
+			if (h->texture.desc.mipmaps > 1)
 				self->context->GenerateMips(h->texture.shader_view);
 		}
 		break;
@@ -2710,12 +2702,12 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		auto h = command->texture_read.handle;
 		auto& desc = command->texture_read.desc;
 
-		auto dx_pixel_size = _renoir_pixelformat_to_size(h->texture.pixel_format);
+		auto dx_pixel_size = _renoir_pixelformat_to_size(h->texture.desc.pixel_format);
 
 		if (h->texture.texture1d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto subresource = D3D11CalcSubresource(0, 0, h->texture.mipmaps);
+			auto subresource = D3D11CalcSubresource(0, 0, h->texture.desc.mipmaps);
 			self->context->Map(h->texture.texture1d_staging, subresource, D3D11_MAP_READ, 0, &mapped_resource);
 			::memcpy(
 				desc.bytes,
@@ -2726,11 +2718,11 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		}
 		else if (h->texture.texture2d)
 		{
-			if (h->texture.cube_map == false)
+			if (h->texture.desc.cube_map == false)
 				desc.z = 0;
 
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto subresource = D3D11CalcSubresource(0, desc.z, h->texture.mipmaps);
+			auto subresource = D3D11CalcSubresource(0, desc.z, h->texture.desc.mipmaps);
 			self->context->Map(h->texture.texture2d_staging, subresource, D3D11_MAP_READ, 0, &mapped_resource);
 
 			char* read_ptr = (char*)mapped_resource.pData;
@@ -2751,7 +2743,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		else if (h->texture.texture3d)
 		{
 			D3D11_MAPPED_SUBRESOURCE mapped_resource{};
-			auto subresource = D3D11CalcSubresource(0, 0, h->texture.mipmaps);
+			auto subresource = D3D11CalcSubresource(0, 0, h->texture.desc.mipmaps);
 			self->context->Map(h->texture.texture3d_staging, subresource, D3D11_MAP_READ, 0, &mapped_resource);
 
 			char* read_ptr = (char*)mapped_resource.pData;
@@ -2843,7 +2835,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		case RENOIR_SHADER_COMPUTE:
 			if (command->texture_bind.sampler == nullptr)
 			{
-				assert(_renoir_pixelformat_is_depth(h->texture.pixel_format) == false && "you can't write to depth buffer from compute shader");
+				assert(_renoir_pixelformat_is_depth(h->texture.desc.pixel_format) == false && "you can't write to depth buffer from compute shader");
 				if (command->texture_bind.gpu_access == RENOIR_ACCESS_READ)
 				{
 					self->context->CSSetShaderResources(command->texture_bind.slot, 1, &h->texture.shader_view);
@@ -3717,15 +3709,9 @@ _renoir_dx11_texture_new(Renoir* api, Renoir_Texture_Desc desc)
 	mn_defer(mn::mutex_unlock(self->mtx));
 
 	auto h = _renoir_dx11_handle_new(self, RENOIR_HANDLE_KIND_TEXTURE);
-	h->texture.access = desc.access;
-	h->texture.pixel_format = desc.pixel_format;
-	h->texture.usage = desc.usage;
-	h->texture.size = desc.size;
-	h->texture.mipmaps = desc.mipmaps;
-	h->texture.cube_map = desc.cube_map;
-	h->texture.render_target = desc.render_target;
-	h->texture.msaa = desc.msaa;
-	h->texture.default_sampler_desc = desc.sampler;
+	h->texture.desc = desc;
+	::memset(h->texture.desc.data, 0, sizeof(h->texture.desc.data));
+	h->texture.desc.data_size = 0;
 
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_NEW);
 	command->texture_new.handle = h;
@@ -3779,7 +3765,16 @@ _renoir_dx11_texture_size(Renoir* api, Renoir_Texture texture)
 {
 	auto h = (Renoir_Handle*)texture.handle;
 	assert(h != nullptr && h->kind == RENOIR_HANDLE_KIND_TEXTURE);
-	return h->texture.size;
+	return h->texture.desc.size;
+}
+
+static Renoir_Texture_Desc
+_renoir_dx11_texture_desc(Renoir* api, Renoir_Texture texture)
+{
+	auto h = (Renoir_Handle*)texture.handle;
+	assert(h != nullptr);
+	assert(h->kind == RENOIR_HANDLE_KIND_TEXTURE);
+	return h->texture.desc;
 }
 
 static Renoir_Program
@@ -3912,13 +3907,13 @@ _renoir_dx11_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 		// first time getting the width/height
 		if (width == -1 && height == -1)
 		{
-			width = color->texture.size.width * ::powf(0.5f, desc.color[i].level);
-			height = color->texture.size.height * ::powf(0.5f, desc.color[i].level);
+			width = color->texture.desc.size.width * ::powf(0.5f, desc.color[i].level);
+			height = color->texture.desc.size.height * ::powf(0.5f, desc.color[i].level);
 		}
 		else
 		{
-			assert(color->texture.size.width * ::powf(0.5f, desc.color[i].level) == width);
-			assert(color->texture.size.height * ::powf(0.5f, desc.color[i].level) == height);
+			assert(color->texture.desc.size.width * ::powf(0.5f, desc.color[i].level) == width);
+			assert(color->texture.desc.size.height * ::powf(0.5f, desc.color[i].level) == height);
 		}
 	}
 
@@ -3928,13 +3923,13 @@ _renoir_dx11_pass_offscreen_new(Renoir* api, Renoir_Pass_Offscreen_Desc desc)
 		// first time getting the width/height
 		if (width == -1 && height == -1)
 		{
-			width = depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level);
-			height = depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level);
+			width = depth->texture.desc.size.width * ::powf(0.5f, desc.depth_stencil.level);
+			height = depth->texture.desc.size.height * ::powf(0.5f, desc.depth_stencil.level);
 		}
 		else
 		{
-			assert(depth->texture.size.width * ::powf(0.5f, desc.depth_stencil.level) == width);
-			assert(depth->texture.size.height * ::powf(0.5f, desc.depth_stencil.level) == height);
+			assert(depth->texture.desc.size.width * ::powf(0.5f, desc.depth_stencil.level) == width);
+			assert(depth->texture.desc.size.height * ::powf(0.5f, desc.depth_stencil.level) == height);
 		}
 	}
 
@@ -4346,7 +4341,7 @@ _renoir_dx11_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture texture
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
 
-	assert(h->texture.usage != RENOIR_USAGE_STATIC);
+	assert(h->texture.desc.usage != RENOIR_USAGE_STATIC);
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_WRITE);
@@ -4461,7 +4456,7 @@ _renoir_dx11_texture_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture,
 	assert(htex != nullptr);
 
 	mn::mutex_lock(self->mtx);
-	auto hsampler = _renoir_dx11_sampler_get(self, htex->texture.default_sampler_desc);
+	auto hsampler = _renoir_dx11_sampler_get(self, htex->texture.desc.sampler);
 	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_BIND);
 	mn::mutex_unlock(self->mtx);
 
@@ -4681,6 +4676,7 @@ _renoir_load_api(Renoir* api)
 	api->texture_free = _renoir_dx11_texture_free;
 	api->texture_native_handle = _renoir_dx11_texture_native_handle;
 	api->texture_size = _renoir_dx11_texture_size;
+	api->texture_desc = _renoir_dx11_texture_desc;
 
 	api->program_new = _renoir_dx11_program_new;
 	api->program_free = _renoir_dx11_program_free;
