@@ -2301,7 +2301,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					}
 				}
 			}
-			
+
 			// Unbind render targets
 			ID3D11RenderTargetView* render_target_views[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE] = { nullptr };
 			self->context->OMSetRenderTargets(RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE, render_target_views, nullptr);
@@ -2315,21 +2315,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				{
 					if (hres->buffer.access == RENOIR_ACCESS_READ || hres->buffer.access == RENOIR_ACCESS_READ_WRITE)
 					{
-						D3D11_BOX src_box{};
-						src_box.left = 0;
-						src_box.right = hres->buffer.size;
-						src_box.bottom = 1;
-						src_box.back = 1;
-						self->context->CopySubresourceRegion(
-							hres->buffer.buffer_staging,
-							0,
-							0,
-							0,
-							0,
-							hres->buffer.buffer,
-							0,
-							&src_box
-						);
+						self->context->CopyResource(hres->buffer.buffer_staging, hres->buffer.buffer);
 					}
 				}
 				else if (hres->kind == RENOIR_HANDLE_KIND_TEXTURE)
@@ -2338,85 +2324,15 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 					{
 						if (hres->texture.texture1d)
 						{
-							D3D11_BOX src_box{};
-							src_box.left = 0;
-							src_box.right = hres->texture.desc.size.width;
-							src_box.bottom = 1;
-							src_box.back = 1;
-							self->context->CopySubresourceRegion(
-								hres->texture.texture1d_staging,
-								0,
-								0,
-								0,
-								0,
-								hres->texture.texture1d,
-								0,
-								&src_box
-							);
+							self->context->CopyResource(hres->texture.texture1d_staging, hres->texture.texture1d);
 						}
 						else if (hres->texture.texture2d)
 						{
-							if (hres->texture.desc.cube_map == false)
-							{
-								D3D11_BOX src_box{};
-								src_box.left = 0;
-								src_box.right = hres->texture.desc.size.width;
-								src_box.top = 0;
-								src_box.bottom = hres->texture.desc.size.height;
-								src_box.back = 1;
-								self->context->CopySubresourceRegion(
-									hres->texture.texture2d_staging,
-									0,
-									0,
-									0,
-									0,
-									hres->texture.texture2d,
-									0,
-									&src_box
-								);
-							}
-							else
-							{
-								for (int i = 0; i < 6; ++i)
-								{
-									D3D11_BOX src_box{};
-									src_box.left = 0;
-									src_box.right = hres->texture.desc.size.width;
-									src_box.top = 0;
-									src_box.bottom = hres->texture.desc.size.height;
-									src_box.back = 1;
-									self->context->CopySubresourceRegion(
-										hres->texture.texture2d_staging,
-										i,
-										0,
-										0,
-										0,
-										hres->texture.texture2d,
-										i,
-										&src_box
-									);
-								}
-							}
+							self->context->CopyResource(hres->texture.texture2d_staging, hres->texture.texture2d);
 						}
 						else if (hres->texture.texture3d)
 						{
-							D3D11_BOX src_box{};
-							src_box.left = 0;
-							src_box.right = hres->texture.desc.size.width;
-							src_box.top = 0;
-							src_box.bottom = hres->texture.desc.size.height;
-							src_box.front = 0;
-							src_box.back = hres->texture.desc.size.depth;
-							self->context->CopySubresourceRegion(
-								h->texture.texture3d_staging,
-								0,
-								0,
-								0,
-								0,
-								h->texture.texture3d,
-								0,
-								&src_box
-							);
+							self->context->CopyResource(hres->texture.texture3d_staging, hres->texture.texture3d);
 						}
 					}
 				}
