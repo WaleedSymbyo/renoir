@@ -11,7 +11,8 @@ typedef enum RENOIR_CONSTANT {
 	RENOIR_CONSTANT_DEFAULT_SAMPLER_CACHE_SIZE = 32,
 	RENOIR_CONSTANT_DRAW_VERTEX_BUFFER_SIZE = 10,
 	RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE = 4,
-	RENOIR_CONSTANT_DEFAULT_PIPELINE_CACHE_SIZE = 64
+	RENOIR_CONSTANT_DEFAULT_PIPELINE_CACHE_SIZE = 64,
+	RENOIR_CONSTANT_MIPLEVELS_SIZE = 6
 } RENOIR_CONSTANT;
 
 // Enums
@@ -421,7 +422,7 @@ typedef struct Renoir
 	void (*texture_sampler_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler);
 	// Compute Bind Functions
 	void (*buffer_compute_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, int slot, RENOIR_ACCESS gpu_access);
-	void (*texture_compute_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access);
+	void (*texture_compute_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, int mip_slice, RENOIR_ACCESS gpu_access);
 	// Draw
 	void (*draw)(struct Renoir* api, Renoir_Pass pass, Renoir_Draw_Desc desc);
 	// Dispatch

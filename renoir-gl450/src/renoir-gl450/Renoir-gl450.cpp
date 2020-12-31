@@ -4009,7 +4009,7 @@ _renoir_gl450_buffer_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer b
 }
 
 static void
-_renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access)
+_renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, int mip_slice, RENOIR_ACCESS gpu_access)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
