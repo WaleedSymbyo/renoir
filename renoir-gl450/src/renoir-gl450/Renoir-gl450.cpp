@@ -1009,6 +1009,7 @@ struct Renoir_Command
 			Renoir_Handle* handle;
 			RENOIR_SHADER shader;
 			int slot;
+			int level;
 			Renoir_Handle* sampler;
 			RENOIR_ACCESS gpu_access;
 		} texture_bind;
@@ -2583,7 +2584,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 			glBindImageTexture(
 				command->texture_bind.slot,
 				h->texture.id,
-				0,
+				command->texture_bind.level,
 				layered,
 				0,
 				gl_gpu_access,
@@ -4009,7 +4010,7 @@ _renoir_gl450_buffer_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer b
 }
 
 static void
-_renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access)
+_renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, int mip_level, RENOIR_ACCESS gpu_access)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
@@ -4021,6 +4022,11 @@ _renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture
 		"gpu should read, write, or both, it has no meaning to bind a texture that the GPU cannot read or write from"
 	);
 
+	if (gpu_access == RENOIR_ACCESS_READ)
+	{
+		assert(mip_level == 0 && "read only textures are bound as samplers, so you can't change mip level");
+	}
+
 	auto htex = (Renoir_Handle*)texture.handle;
 
 	mn::mutex_lock(self->mtx);
@@ -4030,6 +4036,7 @@ _renoir_gl450_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture
 	command->texture_bind.handle = htex;
 	command->texture_bind.shader = RENOIR_SHADER_COMPUTE;
 	command->texture_bind.slot = slot;
+	command->texture_bind.level = mip_level;
 	command->texture_bind.gpu_access = gpu_access;
 
 	_renoir_gl450_command_push(&h->compute_pass, command);

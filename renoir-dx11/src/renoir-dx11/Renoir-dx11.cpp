@@ -379,7 +379,7 @@ struct Renoir_Handle
 			ID3D11Texture2D* texture2d;
 			ID3D11Texture3D* texture3d;
 			ID3D11ShaderResourceView* shader_view;
-			ID3D11UnorderedAccessView* uav;
+			mn::Buf<ID3D11UnorderedAccessView*> uavs;
 			// staging part (for fast CPU writes)
 			ID3D11Texture1D* texture1d_staging;
 			ID3D11Texture2D* texture2d_staging;
@@ -763,6 +763,7 @@ struct Renoir_Command
 			Renoir_Handle* handle;
 			RENOIR_SHADER shader;
 			int slot;
+			int mip_level;
 			Renoir_Handle* sampler;
 			RENOIR_ACCESS gpu_access;
 		} texture_bind;
@@ -1582,11 +1583,16 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(SUCCEEDED(res));
 			}
 
-			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
-			uav_desc.Format = dx_pixelformat;
-			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1D;
-			res = self->device->CreateUnorderedAccessView(h->texture.texture1d, &uav_desc, &h->texture.uav);
-			assert(SUCCEEDED(res));
+			mn::buf_resize(h->texture.uavs, h->texture.desc.mipmaps);
+			for (int i = 0; i < h->texture.uavs.count; ++i)
+			{
+				D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+				uav_desc.Format = dx_pixelformat;
+				uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE1D;
+				uav_desc.Texture1D.MipSlice = i;
+				res = self->device->CreateUnorderedAccessView(h->texture.texture1d, &uav_desc, &h->texture.uavs[i]);
+				assert(SUCCEEDED(res));
+			}
 
 			if (h->texture.desc.mipmaps > 1)
 				self->context->GenerateMips(h->texture.shader_view);
@@ -1595,7 +1601,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			D3D11_TEXTURE2D_DESC texture_desc{};
 			texture_desc.ArraySize = h->texture.desc.cube_map ? 6 : 1;
-			if (h->texture.desc.render_target)
+			if (h->texture.desc.render_target || h->texture.desc.mipmaps > 1)
 			{
 				if (_renoir_pixelformat_is_depth(desc.pixel_format) == false)
 					texture_desc.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
@@ -1668,19 +1674,25 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 
 			if (_renoir_pixelformat_is_depth(desc.pixel_format) == false)
 			{
-				D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
-				uav_desc.Format = dx_pixelformat;
-				if (h->texture.desc.cube_map == false)
+				mn::buf_resize(h->texture.uavs, h->texture.desc.mipmaps);
+				for (int i = 0; i < h->texture.uavs.count; ++i)
 				{
-					uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+					D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+					uav_desc.Format = dx_pixelformat;
+					if (h->texture.desc.cube_map == false)
+					{
+						uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2D;
+						uav_desc.Texture2D.MipSlice = i;
+					}
+					else
+					{
+						uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
+						uav_desc.Texture2DArray.ArraySize = 6;
+						uav_desc.Texture2DArray.MipSlice = i;
+					}
+					auto res = self->device->CreateUnorderedAccessView(h->texture.texture2d, &uav_desc, &h->texture.uavs[i]);
+					assert(SUCCEEDED(res));
 				}
-				else
-				{
-					uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE2DARRAY;
-					uav_desc.Texture2DArray.ArraySize = 6;
-				}
-				auto res = self->device->CreateUnorderedAccessView(h->texture.texture2d, &uav_desc, &h->texture.uav);
-				assert(SUCCEEDED(res));
 			}
 
 			if (desc.render_target && desc.msaa != RENOIR_MSAA_MODE_NONE)
@@ -1754,12 +1766,17 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			auto res = self->device->CreateShaderResourceView(h->texture.texture3d, &view_desc, &h->texture.shader_view);
 			assert(SUCCEEDED(res));
 
-			D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
-			uav_desc.Format = dx_pixelformat;
-			uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
-			uav_desc.Texture3D.WSize = h->texture.desc.size.depth;
-			res = self->device->CreateUnorderedAccessView(h->texture.texture3d, &uav_desc, &h->texture.uav);
-			assert(SUCCEEDED(res));
+			mn::buf_resize(h->texture.uavs, h->texture.desc.mipmaps);
+			for (int i = 0; i < h->texture.uavs.count; ++i)
+			{
+				D3D11_UNORDERED_ACCESS_VIEW_DESC uav_desc{};
+				uav_desc.Format = dx_pixelformat;
+				uav_desc.ViewDimension = D3D11_UAV_DIMENSION_TEXTURE3D;
+				uav_desc.Texture3D.WSize = h->texture.desc.size.depth;
+				uav_desc.Texture3D.MipSlice = i;
+				res = self->device->CreateUnorderedAccessView(h->texture.texture3d, &uav_desc, &h->texture.uavs[i]);
+				assert(SUCCEEDED(res));
+			}
 
 			if (desc.usage == RENOIR_USAGE_DYNAMIC && desc.access != RENOIR_ACCESS_NONE)
 			{
@@ -1785,7 +1802,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		if (h->texture.texture2d) h->texture.texture2d->Release();
 		if (h->texture.texture3d) h->texture.texture3d->Release();
 		if (h->texture.shader_view) h->texture.shader_view->Release();
-		if (h->texture.uav) h->texture.uav->Release();
+		for (auto uav: h->texture.uavs) uav->Release();
+		mn::buf_free(h->texture.uavs);
 		if (h->texture.texture1d_staging) h->texture.texture1d_staging->Release();
 		if (h->texture.texture2d_staging) h->texture.texture2d_staging->Release();
 		if (h->texture.texture3d_staging) h->texture.texture3d_staging->Release();
@@ -2759,7 +2777,7 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				else if (command->texture_bind.gpu_access == RENOIR_ACCESS_WRITE ||
 						command->texture_bind.gpu_access == RENOIR_ACCESS_READ_WRITE)
 				{
-					self->context->CSSetUnorderedAccessViews(command->texture_bind.slot, 1, &h->texture.uav, nullptr);
+					self->context->CSSetUnorderedAccessViews(command->texture_bind.slot, 1, &h->texture.uavs[command->texture_bind.mip_level], nullptr);
 					Renoir_Compute_Write_Slot write_slot{};
 					write_slot.resource = h;
 					write_slot.slot = command->texture_bind.slot;
@@ -4433,7 +4451,7 @@ _renoir_dx11_buffer_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer bu
 }
 
 static void
-_renoir_dx11_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, RENOIR_ACCESS gpu_access)
+_renoir_dx11_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture texture, int slot, int mip_level, RENOIR_ACCESS gpu_access)
 {
 	auto self = api->ctx;
 	auto h = (Renoir_Handle*)pass.handle;
@@ -4445,6 +4463,11 @@ _renoir_dx11_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture 
 		"gpu should read, write, or both, it has no meaning to bind a texture that the GPU cannot read or write from"
 	);
 
+	if (gpu_access == RENOIR_ACCESS_READ)
+	{
+		assert(mip_level == 0 && "read only textures are bound as samplers, so you can't change mip level");
+	}
+
 	auto htex = (Renoir_Handle*)texture.handle;
 
 	mn::mutex_lock(self->mtx);
@@ -4454,6 +4477,7 @@ _renoir_dx11_texture_compute_bind(Renoir* api, Renoir_Pass pass, Renoir_Texture 
 	command->texture_bind.handle = htex;
 	command->texture_bind.shader = RENOIR_SHADER_COMPUTE;
 	command->texture_bind.slot = slot;
+	command->texture_bind.mip_level = mip_level;
 	command->texture_bind.gpu_access = gpu_access;
 
 	_renoir_dx11_command_push(&h->raster_pass, command);
