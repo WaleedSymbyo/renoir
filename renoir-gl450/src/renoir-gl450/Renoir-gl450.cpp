@@ -436,6 +436,9 @@ _renoir_type_to_gl(RENOIR_TYPE type)
 	case RENOIR_TYPE_UINT16:
 		res = GL_UNSIGNED_SHORT;
 		break;
+	case RENOIR_TYPE_UINT32:
+		res = GL_UNSIGNED_INT;
+		break;
 	case RENOIR_TYPE_INT16:
 		res = GL_SHORT;
 		break;
@@ -466,6 +469,7 @@ _renoir_type_to_size(RENOIR_TYPE type)
 		break;
 	case RENOIR_TYPE_UINT8_4:
 	case RENOIR_TYPE_UINT8_4N:
+	case RENOIR_TYPE_UINT32:
 	case RENOIR_TYPE_INT32:
 	case RENOIR_TYPE_FLOAT:
 		res = 4;
@@ -499,6 +503,7 @@ _renoir_type_to_gl_element_count(RENOIR_TYPE type)
 	{
 	case RENOIR_TYPE_UINT8:
 	case RENOIR_TYPE_UINT16:
+	case RENOIR_TYPE_UINT32:
 	case RENOIR_TYPE_INT16:
 	case RENOIR_TYPE_INT32:
 	case RENOIR_TYPE_FLOAT:
