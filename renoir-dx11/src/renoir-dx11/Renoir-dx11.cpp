@@ -544,11 +544,13 @@ enum RENOIR_COMMAND_KIND
 	RENOIR_COMMAND_KIND_USE_PROGRAM,
 	RENOIR_COMMAND_KIND_USE_COMPUTE,
 	RENOIR_COMMAND_KIND_SCISSOR,
+	RENOIR_COMMAND_KIND_BUFFER_CLEAR,
 	RENOIR_COMMAND_KIND_BUFFER_WRITE,
 	RENOIR_COMMAND_KIND_TEXTURE_WRITE,
 	RENOIR_COMMAND_KIND_BUFFER_READ,
 	RENOIR_COMMAND_KIND_TEXTURE_READ,
 	RENOIR_COMMAND_KIND_BUFFER_BIND,
+	RENOIR_COMMAND_KIND_BUFFER_STORAGE_BIND,
 	RENOIR_COMMAND_KIND_TEXTURE_BIND,
 	RENOIR_COMMAND_KIND_DRAW,
 	RENOIR_COMMAND_KIND_DISPATCH,
@@ -725,6 +727,11 @@ struct Renoir_Command
 		struct
 		{
 			Renoir_Handle* handle;
+		} buffer_clear;
+
+		struct
+		{
+			Renoir_Handle* handle;
 			size_t offset;
 			void* bytes;
 			size_t bytes_size;
@@ -757,6 +764,12 @@ struct Renoir_Command
 			int slot;
 			RENOIR_ACCESS gpu_access;
 		} buffer_bind;
+
+		struct
+		{
+			Renoir_Handle* handle[RENOIR_CONSTANT_BUFFER_STORAGE_SIZE];
+			int start_slot;
+		} buffer_storage_bind;
 
 		struct
 		{
@@ -971,7 +984,9 @@ _renoir_dx11_command_free(T* self, Renoir_Command* command)
 	case RENOIR_COMMAND_KIND_SCISSOR:
 	case RENOIR_COMMAND_KIND_BUFFER_READ:
 	case RENOIR_COMMAND_KIND_TEXTURE_READ:
+	case RENOIR_COMMAND_KIND_BUFFER_CLEAR:
 	case RENOIR_COMMAND_KIND_BUFFER_BIND:
+	case RENOIR_COMMAND_KIND_BUFFER_STORAGE_BIND:
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
 	case RENOIR_COMMAND_KIND_DRAW:
 	case RENOIR_COMMAND_KIND_DISPATCH:
@@ -2320,9 +2335,8 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				}
 			}
 
-			// Unbind render targets
-			ID3D11RenderTargetView* render_target_views[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE] = { nullptr };
-			self->context->OMSetRenderTargets(RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE, render_target_views, nullptr);
+			// Unbind render targets and uavs
+			self->context->OMSetRenderTargetsAndUnorderedAccessViews(0, nullptr, nullptr, 0, 0, nullptr, nullptr);
 		}
 		else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
 		{
@@ -2451,6 +2465,13 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		scissor.top = command->scissor.y;
 		scissor.bottom = command->scissor.y + command->scissor.h;
 		self->context->RSSetScissorRects(1, &scissor);
+		break;
+	}
+	case RENOIR_COMMAND_KIND_BUFFER_CLEAR:
+	{
+		auto h = command->buffer_clear.handle;
+		UINT value[4] = {};
+		self->context->ClearUnorderedAccessViewUint(h->buffer.uav, value);
 		break;
 	}
 	case RENOIR_COMMAND_KIND_BUFFER_WRITE:
@@ -2747,6 +2768,30 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 		{
 			assert(false && "invalid buffer");
 		}
+		break;
+	}
+	case RENOIR_COMMAND_KIND_BUFFER_STORAGE_BIND:
+	{
+		ID3D11UnorderedAccessView *uavs[RENOIR_CONSTANT_BUFFER_STORAGE_SIZE] = {};
+		for (int i = 0; i < RENOIR_CONSTANT_BUFFER_STORAGE_SIZE; ++i)
+		{
+			auto h = command->buffer_storage_bind.handle[i];
+			if (h == nullptr)
+				continue;
+
+			uavs[i] = h->buffer.uav;
+		}
+
+		self->context->OMSetRenderTargetsAndUnorderedAccessViews(
+			D3D11_KEEP_RENDER_TARGETS_AND_DEPTH_STENCIL,
+			nullptr,
+			nullptr,
+			command->buffer_storage_bind.start_slot,
+			RENOIR_CONSTANT_BUFFER_STORAGE_SIZE,
+			uavs,
+			0
+		);
+
 		break;
 	}
 	case RENOIR_COMMAND_KIND_TEXTURE_BIND:
@@ -4227,6 +4272,36 @@ _renoir_dx11_scissor(Renoir* api, Renoir_Pass pass, int x, int y, int width, int
 }
 
 static void
+_renoir_dx11_buffer_clear(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
+
+	assert(h->buffer.usage != RENOIR_USAGE_STATIC);
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_BUFFER_CLEAR);
+	mn::mutex_unlock(self->mtx);
+
+	command->buffer_clear.handle = (Renoir_Handle*)buffer.handle;
+	assert(command->buffer_clear.handle->buffer.uav);
+
+	if (h->kind == RENOIR_HANDLE_KIND_RASTER_PASS)
+	{
+		_renoir_dx11_command_push(&h->raster_pass, command);
+	}
+	else if (h->kind == RENOIR_HANDLE_KIND_COMPUTE_PASS)
+	{
+		_renoir_dx11_command_push(&h->compute_pass, command);
+	}
+	else
+	{
+		assert(false && "invalid pass");
+	}
+}
+
+static void
 _renoir_dx11_buffer_write(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size)
 {
 	// this means he's trying to write nothing so no-op
@@ -4375,6 +4450,32 @@ _renoir_dx11_buffer_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, RE
 	command->buffer_bind.shader = shader;
 	command->buffer_bind.slot = slot;
 	command->buffer_bind.gpu_access = RENOIR_ACCESS_NONE;
+
+	_renoir_dx11_command_push(&h->raster_pass, command);
+}
+
+static void
+_renoir_dx11_buffer_storage_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer_Storage_Bind_Desc desc)
+{
+	auto self = api->ctx;
+	auto h = (Renoir_Handle*)pass.handle;
+	assert(h != nullptr);
+
+	assert(h->kind == RENOIR_HANDLE_KIND_RASTER_PASS);
+
+	mn::mutex_lock(self->mtx);
+	auto command = _renoir_dx11_command_new(self, RENOIR_COMMAND_KIND_BUFFER_STORAGE_BIND);
+	mn::mutex_unlock(self->mtx);
+
+	for (int i = 0; i < RENOIR_CONSTANT_BUFFER_STORAGE_SIZE; ++i)
+	{
+		if (desc.buffers[i].handle)
+		{
+			auto h = (Renoir_Handle*)desc.buffers[i].handle;
+			command->buffer_storage_bind.handle[i] = h;
+		}
+	}
+	command->buffer_storage_bind.start_slot = desc.start_slot;
 
 	_renoir_dx11_command_push(&h->raster_pass, command);
 }
@@ -4642,11 +4743,13 @@ _renoir_load_api(Renoir* api)
 	api->use_program = _renoir_dx11_use_program;
 	api->use_compute = _renoir_dx11_use_compute;
 	api->scissor = _renoir_dx11_scissor;
+	api->buffer_clear = _renoir_dx11_buffer_clear;
 	api->buffer_write = _renoir_dx11_buffer_write;
 	api->texture_write = _renoir_dx11_texture_write;
 	api->buffer_read = _renoir_dx11_buffer_read;
 	api->texture_read = _renoir_dx11_texture_read;
 	api->buffer_bind = _renoir_dx11_buffer_bind;
+	api->buffer_storage_bind = _renoir_dx11_buffer_storage_bind;
 	api->texture_bind = _renoir_dx11_texture_bind;
 	api->texture_sampler_bind = _renoir_dx11_texture_sampler_bind;
 	api->texture_compute_bind = _renoir_dx11_texture_compute_bind;
