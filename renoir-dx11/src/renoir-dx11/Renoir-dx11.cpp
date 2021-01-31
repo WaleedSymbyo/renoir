@@ -4489,7 +4489,7 @@ _renoir_dx11_buffer_storage_bind(Renoir* api, Renoir_Pass pass, Renoir_Buffer_St
 		}
 	}
 	assert(desc.start_slot + render_target_count <= 8);
-	assert(desc.start_slot > render_target_count);
+	assert(desc.start_slot >= render_target_count);
 
 	for (int i = 0; i < RENOIR_CONSTANT_BUFFER_STORAGE_SIZE; ++i)
 	{
