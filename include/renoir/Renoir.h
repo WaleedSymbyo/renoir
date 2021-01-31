@@ -11,6 +11,7 @@ typedef enum RENOIR_CONSTANT {
 	RENOIR_CONSTANT_DEFAULT_SAMPLER_CACHE_SIZE = 32,
 	RENOIR_CONSTANT_DRAW_VERTEX_BUFFER_SIZE = 10,
 	RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE = 4,
+	RENOIR_CONSTANT_BUFFER_STORAGE_SIZE = 8,
 	RENOIR_CONSTANT_DEFAULT_PIPELINE_CACHE_SIZE = 64
 } RENOIR_CONSTANT;
 
@@ -33,6 +34,7 @@ typedef enum RENOIR_BUFFER {
 	RENOIR_BUFFER_VERTEX,
 	RENOIR_BUFFER_INDEX,
 	RENOIR_BUFFER_UNIFORM,
+	// TODO(Moustapha): rename this to storage buffer
 	RENOIR_BUFFER_COMPUTE
 } RENOIR_BUFFER;
 
@@ -355,6 +357,11 @@ typedef struct Renoir_Pass_Offscreen_Desc {
 	Renoir_Pass_Attachment depth_stencil;
 } Renoir_Pass_Offscreen_Desc;
 
+typedef struct Renoir_Buffer_Storage_Bind_Desc {
+	Renoir_Buffer buffers[RENOIR_CONSTANT_BUFFER_STORAGE_SIZE];
+	int start_slot;
+} Renoir_Buffer_Storage_Bind_Desc;
+
 struct IRenoir;
 
 typedef struct Renoir
@@ -411,6 +418,8 @@ typedef struct Renoir
 	void (*use_compute)(struct Renoir* api, Renoir_Pass pass, Renoir_Compute compute);
 	void (*scissor)(struct Renoir* api, Renoir_Pass pass, int x, int y, int width, int height);
 	// Write Functions
+	// TODO(Moustapha): consider allowing the user to provide clear value other than zero
+	void (*buffer_zero)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer);
 	void (*buffer_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size);
 	void (*texture_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc);
 	// Read Functions
@@ -418,6 +427,9 @@ typedef struct Renoir
 	void (*texture_read)(struct Renoir* api, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc);
 	// Bind Functions
 	void (*buffer_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, RENOIR_SHADER shader, int slot);
+	// TODO(Moustapha): consider making buffer_bind work like buffer_storage_bind, which means providing all the bindings
+	// at once, if you do that then there will be no need for separate buffer_storage_bind function
+	void (*buffer_storage_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer_Storage_Bind_Desc desc);
 	void (*texture_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot);
 	void (*texture_sampler_bind)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, RENOIR_SHADER shader, int slot, Renoir_Sampler_Desc sampler);
 	// Compute Bind Functions
