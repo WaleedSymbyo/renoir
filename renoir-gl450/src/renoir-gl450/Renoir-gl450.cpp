@@ -2981,7 +2981,7 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 		return false;
 
 	auto self = mn::alloc_zerod<IRenoir>();
-	self->mtx = mn::mutex_new("renoir gl450");
+	self->mtx = mn_mutex_new_with_srcloc("renoir gl450");
 	self->handle_pool = mn::pool_new(sizeof(Renoir_Handle), 128);
 	self->command_pool = mn::pool_new(sizeof(Renoir_Command), 128);
 	self->settings = settings;

@@ -3407,7 +3407,7 @@ _renoir_dx11_init(Renoir* api, Renoir_Settings settings, void*)
 	}
 
 	auto self = mn::alloc_zerod<IRenoir>();
-	self->mtx = mn::mutex_new("renoir dx11");
+	self->mtx = mn_mutex_new_with_srcloc("renoir dx11");
 	self->factory = factory; factory = nullptr;
 	self->adapter = adapter; adapter = nullptr;
 	self->device = device; device = nullptr;
