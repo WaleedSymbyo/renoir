@@ -413,7 +413,7 @@ _renoir_pixelformat_to_gl_compute(RENOIR_PIXELFORMAT format)
 		res = GL_R32F;
 		break;
 	case RENOIR_PIXELFORMAT_R8:
-		res = GL_R8UI;
+		res = GL_R8;
 		break;
 	default:
 		assert(false && "unreachable");
