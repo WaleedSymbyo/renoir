@@ -114,7 +114,7 @@ _renoir_pixelformat_depth_to_dx_shader_view(RENOIR_PIXELFORMAT format)
 	switch(format)
 	{
 	case RENOIR_PIXELFORMAT_D24S8: return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
-	case RENOIR_PIXELFORMAT_D32: return DXGI_FORMAT_R32_TYPELESS;
+	case RENOIR_PIXELFORMAT_D32: return DXGI_FORMAT_R32_FLOAT;
 	default: assert(false && "unreachable"); return (DXGI_FORMAT)0;
 	}
 }
