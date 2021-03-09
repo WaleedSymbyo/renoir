@@ -280,6 +280,9 @@ _renoir_pixelformat_to_internal_gl(RENOIR_PIXELFORMAT format)
 	case RENOIR_PIXELFORMAT_R16I:
 		res = GL_R16I;
 		break;
+	case RENOIR_PIXELFORMAT_R16UI:
+		res = GL_R16UI;
+		break;
 	case RENOIR_PIXELFORMAT_R16F:
 		res = GL_R16F;
 		break;
@@ -322,8 +325,7 @@ _renoir_pixelformat_to_gl(RENOIR_PIXELFORMAT format)
 		res = GL_RGBA;
 		break;
 	case RENOIR_PIXELFORMAT_R16I:
-		res = GL_RED_INTEGER;
-		break;
+	case RENOIR_PIXELFORMAT_R16UI:
 	case RENOIR_PIXELFORMAT_R16F:
 	case RENOIR_PIXELFORMAT_R32F:
 	case RENOIR_PIXELFORMAT_R8:
@@ -361,6 +363,9 @@ _renoir_pixelformat_to_type_gl(RENOIR_PIXELFORMAT format)
 	case RENOIR_PIXELFORMAT_R16I:
 		res = GL_SHORT;
 		break;
+	case RENOIR_PIXELFORMAT_R16UI:
+		res = GL_UNSIGNED_SHORT;
+		break;
 	case RENOIR_PIXELFORMAT_R32F:
 	case RENOIR_PIXELFORMAT_R32G32F:
 	case RENOIR_PIXELFORMAT_R32G32B32A32F:
@@ -392,6 +397,9 @@ _renoir_pixelformat_to_gl_compute(RENOIR_PIXELFORMAT format)
 		break;
 	case RENOIR_PIXELFORMAT_R16I:
 		res = GL_R16I;
+		break;
+	case RENOIR_PIXELFORMAT_R16UI:
+		res = GL_R16UI;
 		break;
 	case RENOIR_PIXELFORMAT_R16F:
 		res = GL_R16F;
@@ -1460,15 +1468,15 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 		int msaa = -1;
 
 		glCreateFramebuffers(1, &h->raster_pass.fb);
+		// we want to initialize this to GL_NONE which is 0 so this initialization is safe
 		GLenum attachments[RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE] = {};
-		int attachments_count = 0;
 		for (size_t i = 0; i < RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE; ++i)
 		{
 			auto color = (Renoir_Handle*)desc.color[i].texture.handle;
 			if (color == nullptr)
 				continue;
 			assert(color->texture.desc.render_target);
-			attachments[attachments_count++] = GL_COLOR_ATTACHMENT0 + i;
+			attachments[i] = GL_COLOR_ATTACHMENT0 + i;
 
 			_renoir_gl450_handle_ref(color);
 			if (color->texture.desc.cube_map == false)
@@ -1517,7 +1525,7 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 				assert(msaa == color->texture.desc.msaa);
 			}
 		}
-		glNamedFramebufferDrawBuffers(h->raster_pass.fb, attachments_count, attachments);
+		glNamedFramebufferDrawBuffers(h->raster_pass.fb, RENOIR_CONSTANT_COLOR_ATTACHMENT_SIZE, attachments);
 		assert(_renoir_gl450_check());
 
 		auto depth = (Renoir_Handle*)desc.depth_stencil.texture.handle;
