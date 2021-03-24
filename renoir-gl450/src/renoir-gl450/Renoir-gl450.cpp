@@ -3945,13 +3945,14 @@ _renoir_gl450_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture textur
 	auto h = (Renoir_Handle*)pass.handle;
 	assert(h != nullptr);
 
-	assert(h->texture.desc.usage != RENOIR_USAGE_STATIC);
+	auto htexture = (Renoir_Handle*)texture.handle;
+	assert(htexture->texture.desc.usage != RENOIR_USAGE_STATIC);
 
 	mn::mutex_lock(self->mtx);
 	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_WRITE);
 	mn::mutex_unlock(self->mtx);
 
-	command->texture_write.handle = (Renoir_Handle*)texture.handle;
+	command->texture_write.handle = htexture;
 	command->texture_write.desc = desc;
 	command->texture_write.desc.bytes = mn::alloc(desc.bytes_size, alignof(char)).ptr;
 	::memcpy(command->texture_write.desc.bytes, desc.bytes, desc.bytes_size);
@@ -3968,6 +3969,71 @@ _renoir_gl450_texture_write(Renoir* api, Renoir_Pass pass, Renoir_Texture textur
 	{
 		assert(false && "invalid pass");
 	}
+}
+
+static void
+_renoir_gl450_buffer_zero_global(Renoir* api, Renoir_Buffer buffer)
+{
+	auto self = api->ctx;
+	auto hbuffer = (Renoir_Handle*)buffer.handle;
+	assert(hbuffer != nullptr);
+
+	assert(hbuffer->buffer.usage != RENOIR_USAGE_STATIC);
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_BUFFER_CLEAR);
+	command->buffer_clear.handle = hbuffer;
+	_renoir_gl450_command_process(self, command);
+}
+
+static void
+_renoir_gl450_buffer_write_global(Renoir* api, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size)
+{
+	// this means he's trying to write nothing so no-op
+	if (bytes_size == 0)
+		return;
+
+	auto self = api->ctx;
+	auto hbuffer = (Renoir_Handle*)buffer.handle;
+	assert(hbuffer != nullptr);
+
+	assert(hbuffer->buffer.usage != RENOIR_USAGE_STATIC);
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_BUFFER_WRITE);
+	command->buffer_write.handle = hbuffer;
+	command->buffer_write.offset = offset;
+	command->buffer_write.bytes = mn::alloc(bytes_size, alignof(char)).ptr;
+	command->buffer_write.bytes_size = bytes_size;
+	::memcpy(command->buffer_write.bytes, bytes, bytes_size);
+	_renoir_gl450_command_process(self, command);
+}
+
+static void
+_renoir_gl450_texture_write_global(Renoir* api, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc)
+{
+	// this means he's trying to write nothing so no-op
+	if (desc.bytes_size == 0)
+		return;
+
+	auto self = api->ctx;
+
+	auto htexture = (Renoir_Handle*)texture.handle;
+	assert(htexture->texture.desc.usage != RENOIR_USAGE_STATIC);
+
+	mn::mutex_lock(self->mtx);
+	mn_defer(mn::mutex_unlock(self->mtx));
+
+	auto command = _renoir_gl450_command_new(self, RENOIR_COMMAND_KIND_TEXTURE_WRITE);
+	command->texture_write.handle = htexture;
+	command->texture_write.desc = desc;
+	command->texture_write.desc.bytes = mn::alloc(desc.bytes_size, alignof(char)).ptr;
+	::memcpy(command->texture_write.desc.bytes, desc.bytes, desc.bytes_size);
+	_renoir_gl450_command_process(self, command);
 }
 
 static void
@@ -4359,6 +4425,9 @@ _renoir_load_api(Renoir* api)
 	api->buffer_zero = _renoir_gl450_buffer_zero;
 	api->buffer_write = _renoir_gl450_buffer_write;
 	api->texture_write = _renoir_gl450_texture_write;
+	api->buffer_zero_global = _renoir_gl450_buffer_zero_global;
+	api->buffer_write_global = _renoir_gl450_buffer_write_global;
+	api->texture_write_global = _renoir_gl450_texture_write_global;
 	api->buffer_read = _renoir_gl450_buffer_read;
 	api->texture_read = _renoir_gl450_texture_read;
 	api->buffer_bind = _renoir_gl450_buffer_bind;

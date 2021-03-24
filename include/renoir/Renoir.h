@@ -423,6 +423,12 @@ typedef struct Renoir
 	void (*buffer_zero)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer);
 	void (*buffer_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size);
 	void (*texture_write)(struct Renoir* api, Renoir_Pass pass, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc);
+	// queues a buffer zero command in the global command list (without a pass)
+	void (*buffer_zero_global)(struct Renoir* api, Renoir_Buffer buffer);
+	// queues a buffer write command in the global command list (without a pass)
+	void (*buffer_write_global)(struct Renoir* api, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size);
+	// queues a texture write command in the global command list (without a pass)
+	void (*texture_write_global)(struct Renoir* api, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc);
 	// Read Functions
 	void (*buffer_read)(struct Renoir* api, Renoir_Buffer buffer, size_t offset, void* bytes, size_t bytes_size);
 	void (*texture_read)(struct Renoir* api, Renoir_Texture texture, Renoir_Texture_Edit_Desc desc);
