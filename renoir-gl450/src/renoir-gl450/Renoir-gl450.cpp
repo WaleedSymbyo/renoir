@@ -564,6 +564,22 @@ _renoir_type_normalized(RENOIR_TYPE type)
 	}
 }
 
+inline static bool
+_renoir_type_is_int(RENOIR_TYPE type)
+{
+	switch(type)
+	{
+	case RENOIR_TYPE_UINT8:
+	case RENOIR_TYPE_UINT8_4:
+	case RENOIR_TYPE_UINT16:
+	case RENOIR_TYPE_UINT32:
+	case RENOIR_TYPE_INT16:
+	case RENOIR_TYPE_INT32:
+		return true;
+	default: return false;
+	}
+}
+
 inline static GLenum
 _renoir_min_filter_to_gl(RENOIR_FILTER filter)
 {
@@ -2721,15 +2737,29 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 
 			GLint gl_size = _renoir_type_to_gl_element_count(vertex.type);
 			GLenum gl_type = _renoir_type_to_gl(vertex.type);
-			bool gl_normalized = _renoir_type_normalized(vertex.type);
-			glVertexAttribPointer(
-				GLuint(i),
-				gl_size,
-				gl_type,
-				gl_normalized,
-				vertex.stride,
-				(void*)vertex.offset
-			);
+
+			if (_renoir_type_is_int(vertex.type))
+			{
+				glVertexAttribIPointer(
+					GLuint(i),
+					gl_size,
+					gl_type,
+					vertex.stride,
+					(void*)vertex.offset
+				);
+			}
+			else
+			{
+				bool gl_normalized = _renoir_type_normalized(vertex.type);
+				glVertexAttribPointer(
+					GLuint(i),
+					gl_size,
+					gl_type,
+					gl_normalized,
+					vertex.stride,
+					(void*)vertex.offset
+				);
+			}
 			glEnableVertexAttribArray(i);
 		}
 
