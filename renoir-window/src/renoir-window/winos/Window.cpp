@@ -16,6 +16,8 @@ typedef struct Renoir_Window_WinOS {
 	HDC hdc;
 	Renoir_Event event;
 	bool running;
+	DWORD style;
+	DWORD ex_style;
 } Renoir_Window_WinOS;
 
 inline static RENOIR_KEY
@@ -420,6 +422,54 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 	return &self->window;
 }
 
+Renoir_Window*
+renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, int height, const char *window_class, uint32_t style, uint32_t ex_style)
+{
+	assert(width > 0 && height > 0);
+
+	auto self = mn::alloc_zerod<Renoir_Window_WinOS>();
+
+	self->window.width = width;
+	self->window.height = height;
+	self->running = true;
+
+	RECT wr = {x, y, LONG(x + self->window.width), LONG(y + self->window.height)};
+	AdjustWindowRectEx(&wr, style, FALSE, ex_style);
+
+	void* parent_handle = nullptr;
+	renoir_window_native_handles(parent_window, &parent_handle, nullptr);
+
+	self->handle = CreateWindowExA(
+		ex_style,
+		window_class,
+		"Untitled",
+		style,
+		wr.left,
+		wr.top,
+		wr.right - wr.left,
+		wr.bottom - wr.top,
+		(HWND)parent_handle,
+		NULL,
+		NULL,
+		NULL);
+	if (self->handle == INVALID_HANDLE_VALUE)
+	{
+		free(self);
+		return nullptr;
+	}
+
+	self->hdc = GetDC(self->handle);
+	ShowWindow(self->handle, SW_SHOW);
+	SetForegroundWindow(self->handle);
+	SetFocus(self->handle);
+	SetWindowLongPtrA(self->handle, GWLP_USERDATA, (LONG_PTR)self);
+
+	self->style = style;
+	self->ex_style = ex_style;
+
+	return &self->window;
+}
+
 void
 renoir_window_free(Renoir_Window* window)
 {
@@ -438,7 +488,7 @@ renoir_window_poll(Renoir_Window* window)
 	memset(&self->event, 0, sizeof(self->event));
 	MSG msg;
 	ZeroMemory(&msg, sizeof(msg));
-	if (PeekMessageA(&msg, self->handle, 0, 0, PM_REMOVE))
+	if (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&msg);
 		DispatchMessageA(&msg);
@@ -452,4 +502,90 @@ renoir_window_native_handles(Renoir_Window* window, void** handle, void** displa
 	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
 	if (handle) *handle = self->handle;
 	if (display) *display = nullptr;
+}
+
+void
+renoir_window_pos_set(Renoir_Window* window, int x, int y)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	RECT rect = { x, y, x, y };
+	::AdjustWindowRectEx(&rect, self->style, FALSE, self->ex_style); // Client to Screen
+	::SetWindowPos(
+		self->handle,
+		nullptr,
+		rect.left,
+		rect.top,
+		0,
+		0,
+		SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+void
+renoir_window_pos_get(Renoir_Window* window, int *out_x, int *out_y)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	POINT pos = {};
+	::ClientToScreen(self->handle, &pos);
+	*out_x = pos.x;
+	*out_y = pos.y;
+}
+
+void
+renoir_window_size_set(Renoir_Window* window, int width, int height)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	RECT rect = { 0, 0, width, height };
+	::AdjustWindowRectEx(&rect, self->style, FALSE, self->ex_style); // Client to Screen
+	::SetWindowPos(
+		self->handle,
+		nullptr,
+		0,
+		0,
+		rect.right - rect.left,
+		rect.bottom - rect.top,
+		SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE);
+}
+
+void
+renoir_window_size_get(Renoir_Window* window, int *out_width, int *out_height)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	RECT rect;
+	::GetClientRect(self->handle, &rect);
+	*out_width = rect.right - rect.left;
+	*out_height = rect.bottom - rect.top;
+}
+
+void
+renoir_window_focus_set(Renoir_Window* window)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	::BringWindowToTop(self->handle);
+	::SetForegroundWindow(self->handle);
+	::SetFocus(self->handle);
+}
+
+bool
+renoir_window_focus_get(Renoir_Window* window)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	return ::GetForegroundWindow() == self->handle;
+}
+
+bool
+renoir_window_minimized_get(Renoir_Window* window)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	return ::IsIconic(self->handle);
+}
+
+void
+renoir_window_title_set(Renoir_Window* window, const char* title)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	::SetWindowTextA(self->handle, title);
 }

@@ -177,6 +177,13 @@ typedef struct Renoir_Window {
 RENOIR_WINDOW_EXPORT Renoir_Window*
 renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_MODE msaa);
 
+RENOIR_WINDOW_EXPORT Renoir_Window*
+renoir_window_child_new(
+	Renoir_Window *parent_window,
+	int x, int y, int width, int height,
+	const char *window_class,
+	unsigned int style, unsigned int ex_style);
+
 RENOIR_WINDOW_EXPORT void
 renoir_window_free(Renoir_Window* self);
 
@@ -185,3 +192,27 @@ renoir_window_poll(Renoir_Window* self);
 
 RENOIR_WINDOW_EXPORT void
 renoir_window_native_handles(Renoir_Window* self, void** handle, void** display);
+
+RENOIR_WINDOW_EXPORT void
+renoir_window_pos_set(Renoir_Window* self, int x, int y);
+
+RENOIR_WINDOW_EXPORT void
+renoir_window_pos_get(Renoir_Window* self, int *out_x, int *out_y);
+
+RENOIR_WINDOW_EXPORT void
+renoir_window_size_set(Renoir_Window* window, int width, int height);
+
+RENOIR_WINDOW_EXPORT void
+renoir_window_size_get(Renoir_Window* window, int *out_width, int *out_height);
+
+RENOIR_WINDOW_EXPORT void
+renoir_window_focus_set(Renoir_Window* window);
+
+RENOIR_WINDOW_EXPORT bool
+renoir_window_focus_get(Renoir_Window* window);
+
+RENOIR_WINDOW_EXPORT bool
+renoir_window_minimized_get(Renoir_Window* window);
+
+RENOIR_WINDOW_EXPORT void
+renoir_window_title_set(Renoir_Window* window, const char* title);
