@@ -1565,7 +1565,6 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			texture_desc.BindFlags = D3D11_BIND_SHADER_RESOURCE | D3D11_BIND_UNORDERED_ACCESS;
 			texture_desc.MipLevels = h->texture.desc.mipmaps;
 			texture_desc.Width = desc.size.width;
-			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 			if (h->texture.desc.mipmaps > 1)
@@ -1634,7 +1633,6 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			texture_desc.MipLevels = h->texture.desc.mipmaps;
 			texture_desc.Width = desc.size.width;
 			texture_desc.Height = desc.size.height;
-			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 			texture_desc.SampleDesc.Count = 1;
@@ -1728,7 +1726,6 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 				texture_desc.MipLevels = 1;
 				texture_desc.Width = desc.size.width;
 				texture_desc.Height = desc.size.height;
-				texture_desc.CPUAccessFlags = dx_access;
 				texture_desc.Usage = D3D11_USAGE_DEFAULT;
 				texture_desc.Format = dx_pixelformat;
 				texture_desc.SampleDesc.Count = dx_msaa;
@@ -1757,7 +1754,6 @@ _renoir_dx11_command_execute(IRenoir* self, Renoir_Command* command)
 			texture_desc.Width = desc.size.width;
 			texture_desc.Height = desc.size.height;
 			texture_desc.Depth = desc.size.depth;
-			texture_desc.CPUAccessFlags = dx_access;
 			texture_desc.Usage = D3D11_USAGE_DEFAULT;
 			texture_desc.Format = dx_pixelformat;
 			if (h->texture.desc.mipmaps > 1)
