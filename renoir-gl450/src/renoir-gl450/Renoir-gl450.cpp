@@ -1115,11 +1115,23 @@ struct Renoir_GL450_State
 	GLboolean last_enable_scissor_test;
 	GLint last_program;
 	GLint last_texture;
-	GLint last_sampler;
+	mn::Buf<GLint> last_samplers;
 	GLenum last_active_texture;
 	GLint last_polygon_mode[2];
 	GLint last_array_buffer;
 };
+
+inline static Renoir_GL450_State
+_renoir_gl450_state_new()
+{
+	return Renoir_GL450_State{};
+}
+
+inline static void
+_renoir_gl450_state_free(Renoir_GL450_State& self)
+{
+	mn::buf_free(self.last_samplers);
+}
 
 inline static void
 _renoir_gl450_state_capture(Renoir_GL450_State& state)
@@ -1127,7 +1139,11 @@ _renoir_gl450_state_capture(Renoir_GL450_State& state)
 	glGetIntegerv(GL_TEXTURE_BINDING_2D, &state.last_texture);
 	glGetIntegerv(GL_ARRAY_BUFFER_BINDING, &state.last_array_buffer);
 	glGetIntegerv(GL_ACTIVE_TEXTURE, (GLint *)&state.last_active_texture);
-	glActiveTexture(GL_TEXTURE0);
+	for (size_t i = 0; i < state.last_samplers.count; ++i)
+	{
+		glActiveTexture(GL_TEXTURE0 + i);
+		glGetIntegerv(GL_SAMPLER_BINDING, &state.last_samplers[i]);
+	}
 	glGetIntegerv(GL_CURRENT_PROGRAM, &state.last_program);
 	glGetIntegerv(GL_VIEWPORT, state.last_viewport);
 	glGetIntegerv(GL_SCISSOR_BOX, state.last_scissor_box);
@@ -1137,7 +1153,6 @@ _renoir_gl450_state_capture(Renoir_GL450_State& state)
 	glGetIntegerv(GL_BLEND_DST_ALPHA, (GLint *)&state.last_blend_dst_alpha);
 	glGetIntegerv(GL_BLEND_EQUATION_RGB, (GLint *)&state.last_blend_equation_rgb);
 	glGetIntegerv(GL_BLEND_EQUATION_ALPHA, (GLint *)&state.last_blend_equation_alpha);
-	glGetIntegerv(GL_SAMPLER_BINDING, &state.last_sampler);
 	glGetIntegerv(GL_POLYGON_MODE, state.last_polygon_mode);
 	glGetBooleanv(GL_DEPTH_WRITEMASK, &state.last_enable_depth_write_mask);
 	state.last_enable_blend		= glIsEnabled(GL_BLEND);
@@ -1154,7 +1169,8 @@ _renoir_gl450_state_reset(Renoir_GL450_State& state)
 	glActiveTexture(state.last_active_texture);
 	glBindBuffer(GL_ARRAY_BUFFER, state.last_array_buffer);
 	glBlendEquationSeparate(state.last_blend_equation_rgb, state.last_blend_equation_alpha);
-	glBindSampler(0, state.last_sampler);
+	for (size_t i = 0; i < state.last_samplers.count; ++i)
+		glBindSampler(i, state.last_samplers[i]);
 	glPolygonMode(GL_FRONT_AND_BACK, (GLenum)state.last_polygon_mode[0]);
 	glBlendFuncSeparate(
 		state.last_blend_src_rgb,
@@ -1451,6 +1467,9 @@ _renoir_gl450_command_execute(IRenoir* self, Renoir_Command* command)
 
 		glCreateVertexArrays(1, &self->vao);
 		glCreateFramebuffers(1, &self->msaa_resolve_fb);
+		GLint max_samplers = 0;
+		glGetIntegerv(GL_MAX_TEXTURE_IMAGE_UNITS, &max_samplers);
+		mn::buf_resize(self->state.last_samplers, max_samplers);
 		assert(_renoir_gl450_check());
 		break;
 	}
@@ -3052,6 +3071,7 @@ _renoir_gl450_init(Renoir* api, Renoir_Settings settings, void* display)
 	self->settings = settings;
 	self->ctx = ctx;
 	self->sampler_cache = mn::buf_new<Renoir_Handle*>();
+	self->state = _renoir_gl450_state_new();
 	self->alive_handles = mn::map_new<Renoir_Handle*, Renoir_Leak_Info>();
 	mn::buf_resize_fill(self->sampler_cache, self->settings.sampler_cache_size, nullptr);
 
@@ -3092,6 +3112,7 @@ _renoir_gl450_dispose(Renoir* api)
 	mn::pool_free(self->handle_pool);
 	mn::pool_free(self->command_pool);
 	mn::buf_free(self->sampler_cache);
+	_renoir_gl450_state_free(self->state);
 	mn::map_free(self->alive_handles);
 	mn::free(self);
 }
