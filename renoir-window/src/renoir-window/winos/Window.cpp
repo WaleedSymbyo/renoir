@@ -437,7 +437,7 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 }
 
 Renoir_Window*
-renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, int height, uint32_t style, uint32_t ex_style)
+renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, int height)
 {
 	assert(width > 0 && height > 0);
 
@@ -448,18 +448,20 @@ renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, i
 	self->window.width = width;
 	self->window.height = height;
 	self->running = true;
+	self->style = WS_POPUP;
+	self->ex_style = WS_EX_APPWINDOW;
 
 	RECT wr = {x, y, LONG(x + self->window.width), LONG(y + self->window.height)};
-	AdjustWindowRectEx(&wr, style, FALSE, ex_style);
+	AdjustWindowRectEx(&wr, self->style, FALSE, self->ex_style);
 
 	void* parent_handle = nullptr;
 	renoir_window_native_handles(parent_window, &parent_handle, nullptr);
 
 	self->handle = CreateWindowExA(
-		ex_style,
+		self->ex_style,
 		"RenoirWindowClass",
 		"Untitled",
-		style,
+		self->style,
 		wr.left,
 		wr.top,
 		wr.right - wr.left,
@@ -479,9 +481,6 @@ renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, i
 	SetForegroundWindow(self->handle);
 	SetFocus(self->handle);
 	SetWindowLongPtrA(self->handle, GWLP_USERDATA, (LONG_PTR)self);
-
-	self->style = style;
-	self->ex_style = ex_style;
 
 	return &self->window;
 }
@@ -610,4 +609,39 @@ void *
 renoir_window_handle_from_point(int x, int y)
 {
 	return ::WindowFromPoint(POINT{x, y});
+}
+
+static BOOL CALLBACK
+_renoir_monitor_enum_proc(HMONITOR monitor, HDC, LPRECT, LPARAM data)
+{
+	MONITORINFO info = {};
+	info.cbSize = sizeof(MONITORINFO);
+	if (::GetMonitorInfo(monitor, &info) == false)
+		return true;
+
+	Renoir_Monitor_Info monitor_info = {};
+	monitor_info.primary = info.dwFlags & MONITORINFOF_PRIMARY;
+	monitor_info.main_pos_x = info.rcMonitor.left;
+	monitor_info.main_pos_y = info.rcMonitor.top;
+	monitor_info.main_width = info.rcMonitor.right - info.rcMonitor.left;
+	monitor_info.main_height = info.rcMonitor.bottom - info.rcMonitor.top;
+	monitor_info.work_pos_x = info.rcWork.left;
+	monitor_info.work_pos_y = info.rcWork.top;
+	monitor_info.work_width = info.rcWork.right - info.rcWork.left;
+	monitor_info.work_height = info.rcWork.bottom - info.rcWork.top;
+
+	// we support querying 4 monitors only
+	Renoir_Monitor *result = (Renoir_Monitor*)data;
+	result->monitors[result->monitor_count++] = monitor_info;
+	if (result->monitor_count == 4)
+		return false;
+	return true;
+}
+
+Renoir_Monitor
+renoir_monitor_query()
+{
+	Renoir_Monitor res = {};
+	::EnumDisplayMonitors(NULL, NULL, _renoir_monitor_enum_proc, (LPARAM)&res);
+	return res;
 }

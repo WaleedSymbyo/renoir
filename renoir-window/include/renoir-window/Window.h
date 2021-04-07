@@ -1,6 +1,7 @@
 #pragma once
 
 #include "renoir-window/Exports.h"
+#include <stdbool.h>
 
 typedef enum RENOIR_KEY {
 	RENOIR_KEY_BACKSPACE,
@@ -184,7 +185,7 @@ RENOIR_WINDOW_EXPORT Renoir_Window*
 renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_MODE msaa);
 
 RENOIR_WINDOW_EXPORT Renoir_Window*
-renoir_window_child_new(Renoir_Window *parent_window, int x, int y, int width, int height, unsigned int style, unsigned int ex_style);
+renoir_window_child_new(Renoir_Window *parent_window, int x, int y, int width, int height);
 
 RENOIR_WINDOW_EXPORT void
 renoir_window_free(Renoir_Window* self);
@@ -221,3 +222,19 @@ renoir_window_title_set(Renoir_Window* window, const char* title);
 
 RENOIR_WINDOW_EXPORT void *
 renoir_window_handle_from_point(int x, int y);
+
+typedef struct Renoir_Monitor_Info {
+	bool primary;
+	int main_pos_x, main_pos_y;
+	int main_width, main_height;
+	int work_pos_x, work_pos_y;
+	int work_width, work_height;
+} Renoir_Monitor_Info;
+
+typedef struct Renoir_Monitor {
+	Renoir_Monitor_Info monitors[4];
+	int monitor_count;
+} Renoir_Monitor;
+
+RENOIR_WINDOW_EXPORT Renoir_Monitor
+renoir_monitor_query();
