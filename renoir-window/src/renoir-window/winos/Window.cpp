@@ -361,6 +361,17 @@ _renoir_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			self->window.height = HIWORD(lparam);
 		}
 		break;
+	case WM_MOVE:
+		if (self)
+		{
+			memset(&self->event, 0, sizeof(self->event));
+			self->event.kind = RENOIR_EVENT_KIND_WINDOW_MOVE;
+			self->event.move.x = LOWORD(lparam);
+			self->event.move.y = HIWORD(lparam);
+			self->window.x = LOWORD(lparam);
+			self->window.y = HIWORD(lparam);
+		}
+		break;
 	default:
 		break;
 	}
@@ -376,6 +387,8 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 
 	auto self = mn::alloc_zerod<Renoir_Window_WinOS>();
 
+	self->window.x = 100;
+	self->window.y = 100;
 	self->window.width = width;
 	self->window.height = height;
 	self->window.title = title;
@@ -395,7 +408,8 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 	RECT wr = {0, 0, LONG(self->window.width), LONG(self->window.height)};
 	AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
 
-	self->handle = CreateWindowExA(NULL,
+	self->handle = CreateWindowExA(
+		NULL,
 		"RenoirWindowClass",
 		self->window.title,
 		WS_OVERLAPPEDWINDOW,
@@ -423,12 +437,14 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 }
 
 Renoir_Window*
-renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, int height, const char *window_class, uint32_t style, uint32_t ex_style)
+renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, int height, uint32_t style, uint32_t ex_style)
 {
 	assert(width > 0 && height > 0);
 
 	auto self = mn::alloc_zerod<Renoir_Window_WinOS>();
 
+	self->window.x = x;
+	self->window.y = y;
 	self->window.width = width;
 	self->window.height = height;
 	self->running = true;
@@ -441,7 +457,7 @@ renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, i
 
 	self->handle = CreateWindowExA(
 		ex_style,
-		window_class,
+		"RenoirWindowClass",
 		"Untitled",
 		style,
 		wr.left,
@@ -488,7 +504,7 @@ renoir_window_poll(Renoir_Window* window)
 	memset(&self->event, 0, sizeof(self->event));
 	MSG msg;
 	ZeroMemory(&msg, sizeof(msg));
-	if (PeekMessageA(&msg, 0, 0, 0, PM_REMOVE))
+	if (PeekMessageA(&msg, self->handle, 0, 0, PM_REMOVE))
 	{
 		TranslateMessage(&msg);
 		DispatchMessageA(&msg);
@@ -588,4 +604,10 @@ renoir_window_title_set(Renoir_Window* window, const char* title)
 {
 	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
 	::SetWindowTextA(self->handle, title);
+}
+
+void *
+renoir_window_handle_from_point(int x, int y)
+{
+	return ::WindowFromPoint(POINT{x, y});
 }

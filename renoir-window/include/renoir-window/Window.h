@@ -131,6 +131,7 @@ typedef enum RENOIR_EVENT_KIND {
 	RENOIR_EVENT_KIND_MOUSE_MOVE,
 	RENOIR_EVENT_KIND_MOUSE_WHEEL,
 	RENOIR_EVENT_KIND_WINDOW_RESIZE,
+	RENOIR_EVENT_KIND_WINDOW_MOVE,
 	RENOIR_EVENT_KIND_WINDOW_CLOSE
 } RENOIR_EVENT_KIND;
 
@@ -158,6 +159,10 @@ typedef struct Renoir_Event {
 		struct {
 			int width, height;
 		} resize;
+
+		struct {
+			int x, y;
+		} move;
 	};
 } Renoir_Event;
 
@@ -169,6 +174,7 @@ typedef enum RENOIR_WINDOW_MSAA_MODE {
 } RENOIR_WINDOW_MSAA_MODE;
 
 typedef struct Renoir_Window {
+	int x, y;
 	int width, height;
 	const char* title;
 	void* userdata;
@@ -178,11 +184,7 @@ RENOIR_WINDOW_EXPORT Renoir_Window*
 renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_MODE msaa);
 
 RENOIR_WINDOW_EXPORT Renoir_Window*
-renoir_window_child_new(
-	Renoir_Window *parent_window,
-	int x, int y, int width, int height,
-	const char *window_class,
-	unsigned int style, unsigned int ex_style);
+renoir_window_child_new(Renoir_Window *parent_window, int x, int y, int width, int height, unsigned int style, unsigned int ex_style);
 
 RENOIR_WINDOW_EXPORT void
 renoir_window_free(Renoir_Window* self);
@@ -216,3 +218,6 @@ renoir_window_minimized_get(Renoir_Window* window);
 
 RENOIR_WINDOW_EXPORT void
 renoir_window_title_set(Renoir_Window* window, const char* title);
+
+RENOIR_WINDOW_EXPORT void *
+renoir_window_handle_from_point(int x, int y);
