@@ -372,6 +372,14 @@ _renoir_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			self->window.y = HIWORD(lparam);
 		}
 		break;
+	case WM_NCHITTEST:
+		if (self)
+		{
+			memset(&self->event, 0, sizeof(self->event));
+			if (self->window.pass_input_to_underlying_window)
+				return HTTRANSPARENT;
+		}
+	break;
 	default:
 		break;
 	}
@@ -405,7 +413,7 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 	wc.lpszClassName = "RenoirWindowClass";
 	RegisterClassExA(&wc);
 
-	RECT wr = {0, 0, LONG(self->window.width), LONG(self->window.height)};
+	RECT wr = {100, 100, LONG(100 + self->window.width), LONG(100 + self->window.height)};
 	AdjustWindowRect(&wr, WS_OVERLAPPEDWINDOW, FALSE);
 
 	self->handle = CreateWindowExA(
@@ -413,8 +421,8 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 		"RenoirWindowClass",
 		self->window.title,
 		WS_OVERLAPPEDWINDOW,
-		100,
-		100,
+		wr.left,
+		wr.top,
 		wr.right - wr.left,
 		wr.bottom - wr.top,
 		NULL,

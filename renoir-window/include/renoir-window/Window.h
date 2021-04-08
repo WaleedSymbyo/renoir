@@ -179,6 +179,7 @@ typedef struct Renoir_Window {
 	int width, height;
 	const char* title;
 	void* userdata;
+	bool pass_input_to_underlying_window;
 } Renoir_Window;
 
 RENOIR_WINDOW_EXPORT Renoir_Window*
