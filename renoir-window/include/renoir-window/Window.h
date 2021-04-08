@@ -224,6 +224,9 @@ renoir_window_title_set(Renoir_Window* window, const char* title);
 RENOIR_WINDOW_EXPORT void *
 renoir_window_handle_from_point(int x, int y);
 
+RENOIR_WINDOW_EXPORT bool
+renoir_window_is_child(Renoir_Window* window);
+
 typedef struct Renoir_Monitor_Info {
 	bool primary;
 	int main_pos_x, main_pos_y;

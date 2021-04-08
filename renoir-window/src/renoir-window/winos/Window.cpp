@@ -619,6 +619,14 @@ renoir_window_handle_from_point(int x, int y)
 	return ::WindowFromPoint(POINT{x, y});
 }
 
+bool
+renoir_window_is_child(Renoir_Window* window)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	auto parent = ::GetParent(self->handle);
+	return (parent && parent != self->handle);
+}
+
 static BOOL CALLBACK
 _renoir_monitor_enum_proc(HMONITOR monitor, HDC, LPRECT, LPARAM data)
 {
