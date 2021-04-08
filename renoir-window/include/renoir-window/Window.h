@@ -133,7 +133,8 @@ typedef enum RENOIR_EVENT_KIND {
 	RENOIR_EVENT_KIND_MOUSE_WHEEL,
 	RENOIR_EVENT_KIND_WINDOW_RESIZE,
 	RENOIR_EVENT_KIND_WINDOW_MOVE,
-	RENOIR_EVENT_KIND_WINDOW_CLOSE
+	RENOIR_EVENT_KIND_WINDOW_CLOSE,
+	RENOIR_EVENT_KIND_DISPLAY_CHANGE
 } RENOIR_EVENT_KIND;
 
 typedef struct Renoir_Event {
@@ -226,6 +227,12 @@ renoir_window_handle_from_point(int x, int y);
 
 RENOIR_WINDOW_EXPORT bool
 renoir_window_is_child(Renoir_Window* window);
+
+RENOIR_WINDOW_EXPORT bool
+renoir_window_has_capture(Renoir_Window* window);
+
+RENOIR_WINDOW_EXPORT void
+renoir_window_set_capture(Renoir_Window* window);
 
 typedef struct Renoir_Monitor_Info {
 	bool primary;

@@ -380,6 +380,12 @@ _renoir_window_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 				return HTTRANSPARENT;
 		}
 	break;
+	case WM_DISPLAYCHANGE:
+		if (self)
+		{
+			memset(&self->event, 0, sizeof(self->event));
+			self->event.kind = RENOIR_EVENT_KIND_DISPLAY_CHANGE;
+		}
 	default:
 		break;
 	}
@@ -625,6 +631,21 @@ renoir_window_is_child(Renoir_Window* window)
 	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
 	auto parent = ::GetParent(self->handle);
 	return (parent && parent != self->handle);
+}
+
+bool
+renoir_window_has_capture(Renoir_Window* window)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	return ::GetCapture() == self->handle;
+}
+
+void
+renoir_window_set_capture(Renoir_Window* window)
+{
+	Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	::ReleaseCapture();
+	::SetCapture(self->handle);
 }
 
 static BOOL CALLBACK
