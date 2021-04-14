@@ -303,6 +303,132 @@ renoir_window_new(int width, int height, const char* title, RENOIR_WINDOW_MSAA_M
 	return &self->window;
 }
 
+Renoir_Window*
+renoir_window_child_new(Renoir_Window* parent_window, int x, int y, int width, int height)
+{
+	assert(width > 0 && height > 0);
+
+	::Display* display = nullptr;
+	::Window parent_handle = {};
+	renoir_window_native_handles(parent_window, (void **)parent_handle, (void **)&display);
+	// TODO: pass this
+	RENOIR_WINDOW_MSAA_MODE msaa = RENOIR_WINDOW_MSAA_MODE_NONE;
+
+	const int visual_attribs[] = {
+		GLX_X_RENDERABLE        , True,
+		GLX_DRAWABLE_TYPE       , GLX_WINDOW_BIT,
+		GLX_DOUBLEBUFFER        , True,
+		GLX_RENDER_TYPE         , GLX_RGBA_BIT,
+		GLX_X_VISUAL_TYPE       , GLX_TRUE_COLOR,
+		GLX_RED_SIZE            , 8,
+		GLX_GREEN_SIZE          , 8,
+		GLX_BLUE_SIZE           , 8,
+		GLX_ALPHA_SIZE          , 8,
+		GLX_DEPTH_SIZE          , 24,
+		GLX_STENCIL_SIZE        , 8,
+		GLX_SAMPLE_BUFFERS_ARB  , (msaa != RENOIR_WINDOW_MSAA_MODE_NONE) ? True : False,
+		GLX_SAMPLES_ARB         , _renoir_window_msaa_to_int(msaa),
+		None
+	};
+
+	int fbcount = 0;
+	auto fbc = glXChooseFBConfig(display, DefaultScreen(display), visual_attribs, &fbcount);
+	if (fbc == nullptr)
+		return nullptr;
+	mn_defer(XFree(fbc));
+
+	int best_fbc = -1;
+	int worst_fbc = -1;
+	int best_num_samp = -1;
+	int worst_num_samp = 999;
+	for(int i = 0; i < fbcount; ++i)
+	{
+		XVisualInfo* vi = glXGetVisualFromFBConfig(display, fbc[i]);
+		mn_defer(XFree(vi));
+		if (vi)
+		{
+			int samp_buf = 0, samples = 0;
+			glXGetFBConfigAttrib(display, fbc[i], GLX_SAMPLE_BUFFERS, &samp_buf);
+			glXGetFBConfigAttrib(display, fbc[i], GLX_SAMPLES, &samples);
+
+			if (best_fbc < 0 || (samp_buf && samples > best_num_samp))
+			{
+				best_fbc = i;
+				best_num_samp = samples;
+			}
+			if (worst_fbc < 0 || !samp_buf || samples < worst_num_samp)
+			{
+				worst_fbc = i;
+				worst_num_samp = samples;
+			}
+		}
+	}
+	auto bestFbc = fbc[best_fbc];
+
+	auto vi = glXGetVisualFromFBConfig(display, bestFbc);
+	if (vi == nullptr)
+		return nullptr;
+	mn_defer(XFree(vi));
+
+	auto color_map = XCreateColormap(display, RootWindow(display, vi->screen), vi->visual, AllocNone);
+
+	XSetWindowAttributes swa{};
+	swa.colormap = color_map;
+	swa.background_pixmap = None;
+	swa.border_pixel = BlackPixel(display, vi->screen);
+	swa.background_pixel = WhitePixel(display, vi->screen);
+	swa.event_mask = StructureNotifyMask | ExposureMask;
+
+	auto handle = XCreateWindow(
+		(::Display*)display,
+		(::Window)parent_handle,
+		x,
+		y,
+		width,
+		height,
+		0,
+		vi->depth,
+		InputOutput,
+		vi->visual,
+		CWBorderPixel | CWColormap | CWEventMask,
+		&swa
+	);
+	if (handle == None)
+		return nullptr;
+	mn_defer(if(handle) XDestroyWindow(display, handle));
+
+	XSetWMProtocols(display, handle, _wm_delete_window(display), 1);
+
+	XSelectInput(
+		display,
+		handle,
+		StructureNotifyMask|
+		KeyPressMask|
+		KeyReleaseMask|
+		ButtonPressMask|
+		ButtonReleaseMask|
+		ExposureMask
+	);
+
+	XStoreName(display, handle, "untitled");
+	XMapWindow(display, handle);
+
+	auto self = mn::alloc_zerod<Renoir_Window_Linux>();
+
+	self->window.x = x;
+	self->window.y = y;
+	self->window.width = width;
+	self->window.height = height;
+	self->running = true;
+	self->display = display;
+	self->handle = handle;
+
+	display = nullptr;
+	handle = None;
+
+	return &self->window;
+}
+
 void
 renoir_window_free(Renoir_Window* window)
 {
@@ -391,7 +517,7 @@ renoir_window_poll(Renoir_Window* window)
 
 			case MotionNotify:
 			{
-				
+
 			}
 			break;
 
@@ -445,7 +571,6 @@ renoir_window_poll(Renoir_Window* window)
 			}
 		}
 	}
-	
 
 	return self->event;
 }
@@ -458,4 +583,137 @@ renoir_window_native_handles(Renoir_Window* window, void** handle, void** displa
 		*handle = (void*)self->handle;
 	if (display)
 		*display = self->display;
+}
+
+void
+renoir_window_pos_set(Renoir_Window* window, int x, int y)
+{
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	// RECT rect = { x, y, x, y };
+	// ::AdjustWindowRectEx(&rect, self->style, FALSE, self->ex_style); // Client to Screen
+	// ::SetWindowPos(
+	// 	self->handle,
+	// 	nullptr,
+	// 	rect.left,
+	// 	rect.top,
+	// 	0,
+	// 	0,
+	// 	SWP_NOZORDER | SWP_NOSIZE | SWP_NOACTIVATE);
+}
+
+void
+renoir_window_pos_get(Renoir_Window* window, int *out_x, int *out_y)
+{
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	// POINT pos = {};
+	// ::ClientToScreen(self->handle, &pos);
+	// *out_x = pos.x;
+	// *out_y = pos.y;
+}
+
+void
+renoir_window_size_set(Renoir_Window* window, int width, int height)
+{
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	// RECT rect = { 0, 0, width, height };
+	// ::AdjustWindowRectEx(&rect, self->style, FALSE, self->ex_style); // Client to Screen
+	// ::SetWindowPos(
+	// 	self->handle,
+	// 	nullptr,
+	// 	0,
+	// 	0,
+	// 	rect.right - rect.left,
+	// 	rect.bottom - rect.top,
+	// 	SWP_NOZORDER | SWP_NOMOVE | SWP_NOACTIVATE);
+}
+
+void
+renoir_window_size_get(Renoir_Window* window, int *out_width, int *out_height)
+{
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+
+	// RECT rect;
+	// ::GetClientRect(self->handle, &rect);
+	// *out_width = rect.right - rect.left;
+	// *out_height = rect.bottom - rect.top;
+}
+
+void
+renoir_window_focus_set(Renoir_Window* window)
+{
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	// ::BringWindowToTop(self->handle);
+	// ::SetForegroundWindow(self->handle);
+	// ::SetFocus(self->handle);
+}
+
+bool
+renoir_window_focus_get(Renoir_Window* window)
+{
+	return false;
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	// return ::GetForegroundWindow() == self->handle;
+}
+
+bool
+renoir_window_minimized_get(Renoir_Window* window)
+{
+	return false;
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	// return ::IsIconic(self->handle);
+}
+
+void
+renoir_window_title_set(Renoir_Window* window, const char* title)
+{
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	// ::SetWindowTextA(self->handle, title);
+}
+
+void *
+renoir_window_handle_from_point(int x, int y)
+{
+	return nullptr;
+	// return ::WindowFromPoint(POINT{x, y});
+}
+
+bool
+renoir_window_is_child(Renoir_Window* window)
+{
+	return true;
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	// auto parent = ::GetParent(self->handle);
+	// return (parent && parent != self->handle);
+}
+
+bool
+renoir_window_has_capture(Renoir_Window* window)
+{
+	return false;
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	// return ::GetCapture() == self->handle;
+}
+
+void
+renoir_window_set_capture(Renoir_Window* window)
+{
+	// Renoir_Window_WinOS* self = (Renoir_Window_WinOS*)window;
+	// ::ReleaseCapture();
+	// ::SetCapture(self->handle);
+}
+
+Renoir_Monitor
+renoir_monitor_query()
+{
+	Renoir_Monitor res = {};
+	res.monitor_count = 1;
+	res.monitors[0].primary = true;
+	res.monitors[0].main_height = 1080;
+	res.monitors[0].main_width = 1920;
+	res.monitors[0].work_height = 1080;
+	res.monitors[0].work_width = 1920;
+	return res;
 }
